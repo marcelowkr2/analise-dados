@@ -54,3 +54,6 @@ banvic-analytics/
    source .venv/bin/activate   # Linux/Mac
    .venv\Scripts\activate      # Windows
 
+- Instalar dependências - pip install -r requirements.txt
+- Rodar Projeto - streamlit run app.py
+
