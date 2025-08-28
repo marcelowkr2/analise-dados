@@ -19,7 +19,7 @@ st.title("Análise por Agência")
 if df.empty:
     st.warning("Sem dados no período selecionado.")
 else:
-    # try to attach agency name
+    
     if agencias is not None and not agencias.empty and agency_id_col is not None and agency_id_col in df.columns:
         ag_id_master = next((c for c in agencias.columns if "id" in c.lower() or "agencia" in c.lower() or "branch" in c.lower()), agencias.columns[0])
         ag_name = next((c for c in agencias.columns if any(k in c.lower() for k in ["nome","name","descricao","cidade","city"])), None)
@@ -27,7 +27,6 @@ else:
         if ag_name is not None and ag_id_master in agencias.columns:
             mapa = agencias[[ag_id_master, ag_name]].drop_duplicates()
             
-            # CORREÇÃO: garantir que as colunas tenham o mesmo tipo antes do merge
             df[agency_id_col] = df[agency_id_col].astype(str)
             mapa[ag_id_master] = mapa[ag_id_master].astype(str)
             
