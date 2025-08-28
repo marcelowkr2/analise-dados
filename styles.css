@@ -1,0 +1,54 @@
+/* Ajuste do background */
+[data-testid="stAppViewContainer"] {
+    background: linear-gradient(180deg, #f4f8fb 0%, #ffffff 100%);
+    font-family: 'Arial', sans-serif;
+}
+
+/* Cards de KPIs */
+.kpi-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 14px 18px;
+    box-shadow: 0 6px 18px rgba(28, 45, 70, 0.06);
+    border: 1px solid rgba(16, 24, 40, 0.05);
+    margin-bottom: 14px;
+}
+
+.kpi-title {
+    color: #6b7280;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 6px;
+}
+
+.kpi-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+/* Ajuste do sidebar */
+[data-testid="stSidebar"] {
+    background: #f8fafc;
+    border-right: 1px solid #e2e8f0;
+}
+
+/* Títulos */
+h1, h2, h3, h4 {
+    color: #1e293b;
+}
+
+/* Botão PDF */
+.stButton>button {
+    background: #2563eb;
+    color: white;
+    font-weight: bold;
+    border-radius: 8px;
+    padding: 8px 16px;
+    border: none;
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
+}
+
+.stButton>button:hover {
+    background: #1d4ed8;
+}
