@@ -154,6 +154,7 @@ def generate_comprehensive_pdf(df, start_date, end_date, sel_ag, total_trans, to
     def create_cover(canvas_obj, doc_obj):
         canvas_obj.saveState()
         canvas_obj.setFont('Helvetica-Bold', 20)
+        canvas_obj.drawCentredString(A4[0]/2, A4[1]-1.5*inch, "RELATÓRIO ANALÍTICO BANVIC")
         canvas_obj.setFont('Helvetica', 12)
         canvas_obj.drawCentredString(A4[0]/2, A4[1]-2.5*inch, f"Período: {format_date_pt_br(start_date)} a {format_date_pt_br(end_date)}")
         canvas_obj.drawCentredString(A4[0]/2, A4[1]-3*inch, f"Agência: {sel_ag}")
@@ -226,57 +227,53 @@ def generate_comprehensive_pdf(df, start_date, end_date, sel_ag, total_trans, to
 
     story.append(Spacer(1, 12))
 
-    # RANKING TOP 10 AGÊNCIAS
+    # RANKING TOP 10 AGÊNCIAS - VERSÃO CORRIGIDA
     story.append(Paragraph("RANKING TOP 10 AGÊNCIAS", heading_style))
     try:
         tmp = df.copy() if df is not None else pd.DataFrame()
-        meta = st.session_state.get("meta_info", {})
-        agency_id_col = meta.get("agency_id_col")
-        agencias_df = meta.get("agencias_df")
-
-        if agency_id_col and agency_id_col in tmp.columns:
-            if agencias_df is not None and not agencias_df.empty:
-                ag_name_col = guess_col(agencias_df, ["nome","name","descricao","city","cidade"])
-                ag_id_col = guess_col(agencias_df, ["id","agencia","branch","branch_id"])
-                if ag_name_col and ag_id_col and ag_id_col in agencias_df.columns:
-                    mapa = agencias_df[[ag_id_col, ag_name_col]].drop_duplicates()
-                    mapa[ag_id_col] = mapa[ag_id_col].astype(str)
-                    tmp[agency_id_col] = tmp[agency_id_col].astype(str)
-                    tmp = tmp.merge(mapa, left_on=agency_id_col, right_on=ag_id_col, how="left")
-                    tmp["ag_label"] = tmp[ag_name_col].fillna(tmp[agency_id_col].astype(str))
-                else:
-                    tmp["ag_label"] = tmp[agency_id_col].astype(str)
+        
+        # Usar coluna de nome da agência se disponível
+        if "agencia_nome" in tmp.columns:
+            agency_label_col = "agencia_nome"
+        else:
+            # Fallback para ID da agência
+            agency_id_col = st.session_state.get("meta_info", {}).get("agency_id_col")
+            if agency_id_col and agency_id_col in tmp.columns:
+                tmp["agencia_nome"] = tmp[agency_id_col].astype(str)
+                agency_label_col = "agencia_nome"
             else:
-                tmp["ag_label"] = tmp[agency_id_col].astype(str)
-        else:
-            # fallback
-            tmp["ag_label"] = tmp[agency_id_col].astype(str) if agency_id_col in tmp.columns else "desconhecida"
+                agency_label_col = None
 
-        ranking = tmp.groupby("ag_label")["_amt"].agg(["count", "sum"]).reset_index().sort_values("count", ascending=False)
-        ranking_data = [['Posição', 'Agência', 'Transações', 'Volume (R$)']]
-        for i, (_, row) in enumerate(ranking.head(10).iterrows(), 1):
-            ranking_data.append([
-                str(i),
-                str(row['ag_label'])[:40],
-                f"{int(row['count']):,}".replace(",", "."),
-                f"R$ {float(row['sum']):,.2f}".replace(",", ".")
-            ])
+        if agency_label_col and not tmp.empty:
+            ranking = tmp.groupby(agency_label_col)["_amt"].agg(["count", "sum"]).reset_index().sort_values("count", ascending=False)
+            ranking_data = [['Posição', 'Agência', 'Transações', 'Volume (R$)']]
+            
+            for i, (_, row) in enumerate(ranking.head(10).iterrows(), 1):
+                ranking_data.append([
+                    str(i),
+                    str(row[agency_label_col])[:40],
+                    f"{int(row['count']):,}".replace(",", "."),
+                    f"R$ {float(row['sum']):,.2f}".replace(",", ".")
+                ])
 
-        if len(ranking_data) == 1:
-            story.append(Paragraph("Sem dados para ranking.", normal_style))
+            if len(ranking_data) > 1:
+                ranking_table = Table(ranking_data, colWidths=[0.5*inch, 2.5*inch, 1*inch, 1.5*inch])
+                ranking_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#4B5563")),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#F5F5DC")),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+                ]))
+                story.append(ranking_table)
+            else:
+                story.append(Paragraph("Sem dados para ranking.", normal_style))
         else:
-            ranking_table = Table(ranking_data, colWidths=[0.5*inch, 2.5*inch, 1*inch, 1.5*inch])
-            ranking_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#4B5563")),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 8),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#F5F5DC")),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
-            ]))
-            story.append(ranking_table)
+            story.append(Paragraph("Informação de agência não disponível.", normal_style))
+            
     except Exception as e:
         story.append(Paragraph(f"Erro ao gerar ranking: {str(e)}", normal_style))
 
@@ -339,6 +336,10 @@ status_col = guess_col(transacoes, ["status","situacao","resultado","aprov","app
 
 # create parsed columns
 transacoes["_dt"] = to_datetime_safe(transacoes[date_col]) if date_col in transacoes.columns else pd.NaT
+# Remover timezone se houver
+if pd.api.types.is_datetime64tz_dtype(transacoes["_dt"]):
+    transacoes["_dt"] = transacoes["_dt"].dt.tz_convert(None)
+
 transacoes["_amt"] = pd.to_numeric(transacoes[amount_col], errors="coerce") if amount_col in transacoes.columns else pd.to_numeric(transacoes.iloc[:,0], errors="coerce")
 
 # normalized status flag
@@ -397,12 +398,12 @@ start, end = None, None
 if date_range and len(date_range) == 2:
     start, end = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
     # ensure naive datetimes for comparison
-    start = pd.to_datetime(start).tz_localize("UTC")
-    end = pd.to_datetime(end).tz_localize("UTC")
+    start = pd.to_datetime(start).tz_localize(None)
+    end = pd.to_datetime(end).tz_localize(None)
     df = df.loc[(df["_dt"] >= start) & (df["_dt"] <= end)]
 
+# Agência filter - CORREÇÃO PARA MOSTRAR NOMES
 if sel_ag != "Todas" and agency_id_col in df.columns:
-    # try map name -> id if agency master table present
     if agencias is not None and ag_name_col and ag_master_id_col:
         ids = agencias.loc[agencias[ag_name_col].astype(str) == sel_ag, ag_master_id_col].unique()
         if len(ids):
@@ -410,18 +411,86 @@ if sel_ag != "Todas" and agency_id_col in df.columns:
         else:
             df = df[df[agency_id_col].astype(str) == sel_ag]
     else:
-        df = df[df[agency_id_col].astype(str) == sel_ag]
+        df = df[df[agency_id_col].astize(str) == sel_ag]
 
+# Client filter (optional) - CORREÇÃO PARA MOSTRAR NOMES
 if sel_client != "Todos" and client_id_col in df.columns and clientes is not None:
     # try join by name if possible
     cli_name_col = guess_col(clientes, ["nome","name","razao"])
     cli_id_master = guess_col(clientes, ["id","cliente","customer"])
     if cli_name_col and cli_id_master and cli_name_col in clientes.columns:
+        # Primeiro encontramos o ID do cliente selecionado pelo nome
         ids = clientes.loc[clientes[cli_name_col].astype(str) == sel_client, cli_id_master].unique()
         if len(ids):
             df = df[df[client_id_col].isin(ids)]
     else:
-        df = df[df[client_id_col].astype(str) == sel_client]
+        df = df[df[client_id_col].astize(str) == sel_client]
+
+# ADICIONAR: Vincular nomes de agências ao DataFrame filtrado
+if agencias is not None and agency_id_col in df.columns:
+    ag_name_col = guess_col(agencias, ["nome","name","descricao","city","cidade"])
+    ag_id_col = guess_col(agencias, ["id","agencia","branch","branch_id"])
+    
+    if ag_name_col and ag_id_col:
+        # Criar mapeamento ID -> Nome
+        agencia_map = agencias[[ag_id_col, ag_name_col]].drop_duplicates()
+        agencia_map = agencia_map.loc[:, ~agencia_map.columns.duplicated()]  # Remover duplicatas
+        agencia_map[ag_id_col] = agencia_map[ag_id_col].astype(str)
+        df[agency_id_col] = df[agency_id_col].astype(str)
+        
+        # Renomear colunas para evitar conflitos
+        agencia_map_renamed = agencia_map.rename(columns={
+            ag_id_col: f"{ag_id_col}_agencia_map",
+            ag_name_col: "agencia_nome"
+        })
+        
+        # Fazer o merge para adicionar o nome da agência
+        df = df.merge(agencia_map_renamed, 
+                     left_on=agency_id_col, 
+                     right_on=f"{ag_id_col}_agencia_map", 
+                     how="left")
+        
+        # Limpar coluna temporária
+        df = df.drop(columns=[f"{ag_id_col}_agencia_map"], errors="ignore")
+
+# ADICIONAR: Vincular nomes de clientes ao DataFrame filtrado
+if clientes is not None and client_id_col in df.columns:
+    cli_name_col = guess_col(clientes, ["nome","name","razao","fantasia"])
+    cli_id_col = guess_col(clientes, ["id","cliente","customer","cod_cliente"])
+    
+    if cli_name_col and cli_id_col:
+        # Criar mapeamento ID -> Nome
+        cliente_map = clientes[[cli_id_col, cli_name_col]].drop_duplicates()
+        cliente_map = cliente_map.loc[:, ~cliente_map.columns.duplicated()]  # Remover duplicatas
+        cliente_map[cli_id_col] = cliente_map[cli_id_col].astype(str)
+        df[client_id_col] = df[client_id_col].astype(str)
+        
+        # Renomear colunas para evitar conflitos
+        cliente_map_renamed = cliente_map.rename(columns={
+            cli_id_col: f"{cli_id_col}_cliente_map",
+            cli_name_col: "cliente_nome"
+        })
+        
+        # Fazer o merge para adicionar o nome do cliente
+        df = df.merge(cliente_map_renamed, 
+                     left_on=client_id_col, 
+                     right_on=f"{cli_id_col}_cliente_map", 
+                     how="left")
+        
+        # Limpar coluna temporária
+        df = df.drop(columns=[f"{cli_id_col}_cliente_map"], errors="ignore")
+    cli_name_col = guess_col(clientes, ["nome","name","razao"])
+    cli_id_col = guess_col(clientes, ["id","cliente","customer"])
+    
+    if cli_name_col and cli_id_col:
+        # Criar mapeamento ID -> Nome
+        cliente_map = clientes[[cli_id_col, cli_name_col]].drop_duplicates()
+        cliente_map[cli_id_col] = cliente_map[cli_id_col].astype(str)
+        df[client_id_col] = df[client_id_col].astype(str)
+        
+        # Fazer o merge para adicionar o nome do cliente
+        df = df.merge(cliente_map, left_on=client_id_col, right_on=cli_id_col, how="left")
+        df["cliente_nome"] = df[cli_name_col].fillna(df[client_id_col].astype(str))
 
 # save filtered df and meta_info in session_state (padronizado)
 st.session_state["df_filtered"] = df
@@ -431,7 +500,9 @@ st.session_state["meta_info"] = {
     "agency_id_col": agency_id_col,
     "client_id_col": client_id_col,
     "agencias_df": agencias,
-    "clientes_df": clientes
+    "clientes_df": clientes,
+    "agencia_nome_col": "agencia_nome",
+    "cliente_nome_col": "cliente_nome"
 }
 
 # ---------- Header / KPIs (cards) ----------
@@ -532,39 +603,70 @@ with right:
         tmp = df.copy()
         if "_dt" in tmp.columns:
             max_date = tmp["_dt"].max()
-            start6 = max_date - pd.DateOffset(months=6)
-            tmp6 = tmp[tmp["_dt"] >= start6]
+            if pd.notna(max_date):
+                start6 = max_date - pd.DateOffset(months=6)
+                tmp6 = tmp[tmp["_dt"] >= start6]
+            else:
+                tmp6 = tmp  # fallback se max_date for NaT
         else:
             tmp6 = tmp
 
-        agencies = st.session_state.get("meta_info", {}).get("agencias_df")
-        if agencies is not None and not agencies.empty and agency_id_col in tmp6.columns:
-            ag_name = guess_col(agencies, ["nome","name","descricao","city","cidade"])
-            ag_id = guess_col(agencies, ["id","agencia","branch","branch_id"])
-            if ag_name and ag_id in agencies.columns:
-                mapa = agencies[[ag_id, ag_name]].drop_duplicates()
-                mapa[ag_id] = mapa[ag_id].astype(str)
-                tmp6[agency_id_col] = tmp6[agency_id_col].astype(str)
-                tmp6 = tmp6.merge(mapa, left_on=agency_id_col, right_on=ag_id, how="left")
-                tmp6["ag_label"] = tmp6[ag_name].fillna(tmp6[agency_id_col].astype(str))
-            else:
-                tmp6["ag_label"] = tmp6[agency_id_col].astype(str)
+        # Usar a coluna de nome da agência se disponível
+        if "agencia_nome" in tmp6.columns:
+            agency_label_col = "agencia_nome"
         else:
-            tmp6["ag_label"] = tmp6[agency_id_col].astype(str) if agency_id_col in tmp6.columns else "desconhecida"
+            # Fallback: usar ID da agência
+            agency_id_col = st.session_state.get("agency_id_col")
+            if agency_id_col and agency_id_col in tmp6.columns:
+                tmp6["agencia_nome"] = tmp6[agency_id_col].astype(str)
+                agency_label_col = "agencia_nome"
+            else:
+                agency_label_col = None
 
-        if not tmp6.empty:
-            ranking6 = tmp6.groupby("ag_label")["_amt"].agg(["count","sum"]).reset_index().rename(columns={"count":"n_trans","sum":"volume"}).sort_values("n_trans", ascending=False)
+        if agency_label_col and not tmp6.empty:
+            # Agrupar por agência (usando nome se disponível)
+            ranking6 = tmp6.groupby(agency_label_col).agg(
+                n_transacoes=("_amt", "count"),
+                volume=("_amt", "sum")
+            ).reset_index().sort_values("n_transacoes", ascending=False)
+            
+            # Renomear colunas para consistência
+            ranking6 = ranking6.rename(columns={agency_label_col: "agencia"})
+
             if not ranking6.empty:
-                st.plotly_chart(px.bar(ranking6.head(10).sort_values("n_trans"), x="n_trans", y="ag_label", orientation="h",
-                                       title="Top 10 - nº transações (6m)", labels={"n_trans": "Número de Transações", "ag_label": "Agência"}),
-                               use_container_width=True)
-                st.dataframe(ranking6.head(50).reset_index(drop=True))
+                # Gráfico de top 10
+                top10 = ranking6.head(10).sort_values("n_transacoes", ascending=True)
+                fig = px.bar(top10, 
+                            x="n_transacoes", 
+                            y="agencia", 
+                            orientation="h",
+                            title="Top 10 - nº transações (6m)", 
+                            labels={"n_transacoes": "Número de Transações", "agencia": "Agência"})
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Tabela de dados
+                ranking_display = ranking6.head(50).copy()
+                ranking_display["volume"] = ranking_display["volume"].round(2)
+                
+                st.dataframe(
+                    ranking_display,
+                    column_config={
+                        "agencia": "Agência",
+                        "n_transacoes": st.column_config.NumberColumn("Nº Transações", format="%d"),
+                        "volume": st.column_config.NumberColumn("Volume", format="R$ %.2f")
+                    },
+                    use_container_width=True,
+                    height=400
+                )
             else:
                 st.info("Nenhum dado disponível para o ranking de agências.")
         else:
-            st.info("Nenhum dado disponível para os últimos 6 meses.")
+            st.info("Nenhuma informação de agência disponível para análise.")
+            
     except Exception as e:
-        st.error("Erro ao calcular top agências: " + str(e))
+        st.error(f"Erro ao calcular top agências: {str(e)}")
+        st.error("Detalhes do erro:")
+        st.code(traceback.format_exc())
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown('<div class="section-card"><h4>Sazonalidade - Dia da Semana</h4>', unsafe_allow_html=True)
