@@ -154,7 +154,6 @@ def generate_comprehensive_pdf(df, start_date, end_date, sel_ag, total_trans, to
     def create_cover(canvas_obj, doc_obj):
         canvas_obj.saveState()
         canvas_obj.setFont('Helvetica-Bold', 20)
-        canvas_obj.drawCentredString(A4[0]/2, A4[1]-1.5*inch, "RELATÓRIO ANALÍTICO BANVIC")
         canvas_obj.setFont('Helvetica', 12)
         canvas_obj.drawCentredString(A4[0]/2, A4[1]-2.5*inch, f"Período: {format_date_pt_br(start_date)} a {format_date_pt_br(end_date)}")
         canvas_obj.drawCentredString(A4[0]/2, A4[1]-3*inch, f"Agência: {sel_ag}")
@@ -227,7 +226,7 @@ def generate_comprehensive_pdf(df, start_date, end_date, sel_ag, total_trans, to
 
     story.append(Spacer(1, 12))
 
-    # RANKING TOP 10 AGÊNCIAS - VERSÃO CORRIGIDA
+       # RANKING TOP 10 AGÊNCIAS - VERSÃO CORRIGIDA
     story.append(Paragraph("RANKING TOP 10 AGÊNCIAS", heading_style))
     try:
         tmp = df.copy() if df is not None else pd.DataFrame()
@@ -275,6 +274,7 @@ def generate_comprehensive_pdf(df, start_date, end_date, sel_ag, total_trans, to
             story.append(Paragraph("Informação de agência não disponível.", normal_style))
             
     except Exception as e:
+        story.append(Paragraph(f"Erro ao gerar ranking: {str(e)}", normal_style))
         story.append(Paragraph(f"Erro ao gerar ranking: {str(e)}", normal_style))
 
     story.append(Spacer(1, 12))
@@ -336,10 +336,6 @@ status_col = guess_col(transacoes, ["status","situacao","resultado","aprov","app
 
 # create parsed columns
 transacoes["_dt"] = to_datetime_safe(transacoes[date_col]) if date_col in transacoes.columns else pd.NaT
-# Remover timezone se houver
-if pd.api.types.is_datetime64tz_dtype(transacoes["_dt"]):
-    transacoes["_dt"] = transacoes["_dt"].dt.tz_convert(None)
-
 transacoes["_amt"] = pd.to_numeric(transacoes[amount_col], errors="coerce") if amount_col in transacoes.columns else pd.to_numeric(transacoes.iloc[:,0], errors="coerce")
 
 # normalized status flag
@@ -398,20 +394,22 @@ start, end = None, None
 if date_range and len(date_range) == 2:
     start, end = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
     # ensure naive datetimes for comparison
-    start = pd.to_datetime(start).tz_localize(None)
-    end = pd.to_datetime(end).tz_localize(None)
+    start = pd.to_datetime(start).tz_localize("UTC")
+    end = pd.to_datetime(end).tz_localize("UTC")
     df = df.loc[(df["_dt"] >= start) & (df["_dt"] <= end)]
 
 # Agência filter - CORREÇÃO PARA MOSTRAR NOMES
 if sel_ag != "Todas" and agency_id_col in df.columns:
+    # try map name -> id if agency master table present
     if agencias is not None and ag_name_col and ag_master_id_col:
+        # Primeiro filtramos as agências pelo nome selecionado
         ids = agencias.loc[agencias[ag_name_col].astype(str) == sel_ag, ag_master_id_col].unique()
         if len(ids):
             df = df[df[agency_id_col].isin(ids)]
         else:
             df = df[df[agency_id_col].astype(str) == sel_ag]
     else:
-        df = df[df[agency_id_col].astize(str) == sel_ag]
+        df = df[df[agency_id_col].astype(str) == sel_ag]
 
 # Client filter (optional) - CORREÇÃO PARA MOSTRAR NOMES
 if sel_client != "Todos" and client_id_col in df.columns and clientes is not None:
@@ -424,27 +422,40 @@ if sel_client != "Todos" and client_id_col in df.columns and clientes is not Non
         if len(ids):
             df = df[df[client_id_col].isin(ids)]
     else:
-        df = df[df[client_id_col].astize(str) == sel_client]
+        df = df[df[client_id_col].astype(str) == sel_client]
 
-# ADICIONAR: Vincular nomes de agências ao DataFrame filtrado
+# ADICIONAR: Vincular informações completas de agências
 if agencias is not None and agency_id_col in df.columns:
-    ag_name_col = guess_col(agencias, ["nome","name","descricao","city","cidade"])
-    ag_id_col = guess_col(agencias, ["id","agencia","branch","branch_id"])
+    # Identificar colunas relevantes das agências
+    ag_id_col = guess_col(agencias, ["cod_agencia", "id", "agencia", "branch", "branch_id"])
+    ag_name_col = guess_col(agencias, ["nome", "name", "descricao"])
+    ag_cidade_col = guess_col(agencias, ["cidade", "city"])
+    ag_uf_col = guess_col(agencias, ["uf", "estado", "state"])
+    ag_tipo_col = guess_col(agencias, ["tipo_agencia", "tipo", "type"])
     
-    if ag_name_col and ag_id_col:
-        # Criar mapeamento ID -> Nome
-        agencia_map = agencias[[ag_id_col, ag_name_col]].drop_duplicates()
-        agencia_map = agencia_map.loc[:, ~agencia_map.columns.duplicated()]  # Remover duplicatas
+    if ag_id_col:
+        # Criar mapeamento com todas as informações das agências
+        agencia_cols = [ag_id_col]
+        if ag_name_col: agencia_cols.append(ag_name_col)
+        if ag_cidade_col: agencia_cols.append(ag_cidade_col)
+        if ag_uf_col: agencia_cols.append(ag_uf_col)
+        if ag_tipo_col: agencia_cols.append(ag_tipo_col)
+        
+        agencia_map = agencias[agencia_cols].drop_duplicates()
+        agencia_map = agencia_map.loc[:, ~agencia_map.columns.duplicated()]
         agencia_map[ag_id_col] = agencia_map[ag_id_col].astype(str)
         df[agency_id_col] = df[agency_id_col].astype(str)
         
         # Renomear colunas para evitar conflitos
-        agencia_map_renamed = agencia_map.rename(columns={
-            ag_id_col: f"{ag_id_col}_agencia_map",
-            ag_name_col: "agencia_nome"
-        })
+        rename_dict = {ag_id_col: f"{ag_id_col}_agencia_map"}
+        if ag_name_col: rename_dict[ag_name_col] = "agencia_nome"
+        if ag_cidade_col: rename_dict[ag_cidade_col] = "agencia_cidade"
+        if ag_uf_col: rename_dict[ag_uf_col] = "agencia_uf"
+        if ag_tipo_col: rename_dict[ag_tipo_col] = "agencia_tipo"
         
-        # Fazer o merge para adicionar o nome da agência
+        agencia_map_renamed = agencia_map.rename(columns=rename_dict)
+        
+        # Fazer o merge
         df = df.merge(agencia_map_renamed, 
                      left_on=agency_id_col, 
                      right_on=f"{ag_id_col}_agencia_map", 
@@ -453,8 +464,63 @@ if agencias is not None and agency_id_col in df.columns:
         # Limpar coluna temporária
         df = df.drop(columns=[f"{ag_id_col}_agencia_map"], errors="ignore")
 
-# ADICIONAR: Vincular nomes de clientes ao DataFrame filtrado
+# ADICIONAR: Vincular informações completas de clientes
 if clientes is not None and client_id_col in df.columns:
+    # Identificar colunas relevantes dos clientes
+    cli_id_col = guess_col(clientes, ["cod_cliente", "id", "cliente", "customer"])
+    cli_primeiro_nome = guess_col(clientes, ["primeiro_nome", "nome", "first_name", "name"])
+    cli_ultimo_nome = guess_col(clientes, ["ultimo_nome", "last_name", "sobrenome"])
+    cli_email = guess_col(clientes, ["email", "e-mail"])
+    cli_tipo = guess_col(clientes, ["tipo_cliente", "tipo", "type"])
+    cli_cpf = guess_col(clientes, ["cpfcnpj", "cpf", "cnpj", "documento"])
+    cli_data_nasc = guess_col(clientes, ["data_nascimento", "nascimento", "birth_date"])
+    cli_endereco = guess_col(clientes, ["endereco", "address"])
+    cli_cep = guess_col(clientes, ["cep", "zip_code"])
+    
+    if cli_id_col:
+        # Criar mapeamento com todas as informações dos clientes
+        cliente_cols = [cli_id_col]
+        if cli_primeiro_nome: cliente_cols.append(cli_primeiro_nome)
+        if cli_ultimo_nome: cliente_cols.append(cli_ultimo_nome)
+        if cli_email: cliente_cols.append(cli_email)
+        if cli_tipo: cliente_cols.append(cli_tipo)
+        if cli_cpf: cliente_cols.append(cli_cpf)
+        if cli_data_nasc: cliente_cols.append(cli_data_nasc)
+        if cli_endereco: cliente_cols.append(cli_endereco)
+        if cli_cep: cliente_cols.append(cli_cep)
+        
+        cliente_map = clientes[cliente_cols].drop_duplicates()
+        cliente_map = cliente_map.loc[:, ~cliente_map.columns.duplicated()]
+        cliente_map[cli_id_col] = cliente_map[cli_id_col].astype(str)
+        df[client_id_col] = df[client_id_col].astype(str)
+        
+        # Renomear colunas para evitar conflitos
+        rename_dict = {cli_id_col: f"{cli_id_col}_cliente_map"}
+        if cli_primeiro_nome: rename_dict[cli_primeiro_nome] = "cliente_primeiro_nome"
+        if cli_ultimo_nome: rename_dict[cli_ultimo_nome] = "cliente_ultimo_nome"
+        if cli_email: rename_dict[cli_email] = "cliente_email"
+        if cli_tipo: rename_dict[cli_tipo] = "cliente_tipo"
+        if cli_cpf: rename_dict[cli_cpf] = "cliente_cpf"
+        if cli_data_nasc: rename_dict[cli_data_nasc] = "cliente_data_nascimento"
+        if cli_endereco: rename_dict[cli_endereco] = "cliente_endereco"
+        if cli_cep: rename_dict[cli_cep] = "cliente_cep"
+        
+        cliente_map_renamed = cliente_map.rename(columns=rename_dict)
+        
+        # Fazer o merge
+        df = df.merge(cliente_map_renamed, 
+                     left_on=client_id_col, 
+                     right_on=f"{cli_id_col}_cliente_map", 
+                     how="left")
+        
+        # Criar nome completo do cliente
+        if "cliente_primeiro_nome" in df.columns and "cliente_ultimo_nome" in df.columns:
+            df["cliente_nome_completo"] = df["cliente_primeiro_nome"] + " " + df["cliente_ultimo_nome"]
+        elif "cliente_primeiro_nome" in df.columns:
+            df["cliente_nome_completo"] = df["cliente_primeiro_nome"]
+        
+        # Limpar coluna temporária
+        df = df.drop(columns=[f"{cli_id_col}_cliente_map"], errors="ignore")
     cli_name_col = guess_col(clientes, ["nome","name","razao","fantasia"])
     cli_id_col = guess_col(clientes, ["id","cliente","customer","cod_cliente"])
     
@@ -490,7 +556,7 @@ if clientes is not None and client_id_col in df.columns:
         
         # Fazer o merge para adicionar o nome do cliente
         df = df.merge(cliente_map, left_on=client_id_col, right_on=cli_id_col, how="left")
-        df["cliente_nome"] = df[cli_name_col].fillna(df[client_id_col].astype(str))
+        df["cliente_nome"] = df[cli_name_col].fillna(df[client_id_col])
 
 # save filtered df and meta_info in session_state (padronizado)
 st.session_state["df_filtered"] = df
@@ -501,8 +567,8 @@ st.session_state["meta_info"] = {
     "client_id_col": client_id_col,
     "agencias_df": agencias,
     "clientes_df": clientes,
-    "agencia_nome_col": "agencia_nome",
-    "cliente_nome_col": "cliente_nome"
+    "agencia_nome_col": "agencia_nome",  # NOVO: coluna com nome da agência
+    "cliente_nome_col": "cliente_nome"   # NOVO: coluna com nome do cliente
 }
 
 # ---------- Header / KPIs (cards) ----------
