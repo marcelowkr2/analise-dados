@@ -393,10 +393,20 @@ start, end = None, None
 
 if date_range and len(date_range) == 2:
     start, end = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
-    # ensure naive datetimes for comparison
-    start = pd.to_datetime(start).tz_localize("UTC")
-    end = pd.to_datetime(end).tz_localize("UTC")
-    df = df.loc[(df["_dt"] >= start) & (df["_dt"] <= end)]
+    
+    # Remover timezone de todas as datas para compatibilidade
+    start = start.tz_localize(None) if hasattr(start, 'tz') else start
+    end = end.tz_localize(None) if hasattr(end, 'tz') else end
+    
+    # Se a coluna _dt tiver timezone, remover também
+    if hasattr(df["_dt"].dtype, 'tz'):
+        df["_dt"] = df["_dt"].dt.tz_localize(None)
+    elif df["_dt"].dt.tz is not None:
+        df["_dt"] = df["_dt"].dt.tz_localize(None)
+    
+    # Filtro seguro
+    mask = (df["_dt"] >= start) & (df["_dt"] <= end)
+    df = df.loc[mask]
 
 # Agência filter - CORREÇÃO PARA MOSTRAR NOMES
 if sel_ag != "Todas" and agency_id_col in df.columns:
@@ -424,8 +434,61 @@ if sel_client != "Todos" and client_id_col in df.columns and clientes is not Non
     else:
         df = df[df[client_id_col].astype(str) == sel_client]
 
-# ADICIONAR: Vincular informações completas de agências
+# Processamento de informações de agências - VERSÃO OTIMIZADA
 if agencias is not None and agency_id_col in df.columns:
+    # Identificar colunas relevantes das agências
+    ag_id_col = 'cod_agencia' if 'cod_agencia' in agencias.columns else None
+    if not ag_id_col:
+        ag_id_col = guess_col(agencias, ["cod_agencia", "id", "agencia", "branch", "branch_id"])
+    
+    ag_name_col = 'nome' if 'nome' in agencias.columns else guess_col(agencias, ["nome", "name", "descricao"])
+    ag_cidade_col = 'cidade' if 'cidade' in agencias.columns else guess_col(agencias, ["cidade", "city"])
+    ag_uf_col = 'uf' if 'uf' in agencias.columns else guess_col(agencias, ["uf", "estado", "state"])
+    ag_tipo_col = 'tipo_agencia' if 'tipo_agencia' in agencias.columns else guess_col(agencias, ["tipo_agencia", "tipo", "type"])
+    
+    if ag_id_col:
+        try:
+            # Criar mapeamento com todas as informações das agências
+            agencia_cols = [col for col in [ag_id_col, ag_name_col, ag_cidade_col, ag_uf_col, ag_tipo_col] 
+                          if col is not None and col in agencias.columns]
+            
+            if agencia_cols:
+                agencia_map = agencias[agencia_cols].drop_duplicates()
+                
+                # Converter para string para evitar problemas de tipo
+                agencia_map[ag_id_col] = agencia_map[ag_id_col].astype(str)
+                df[agency_id_col] = df[agency_id_col].astype(str)
+                
+                # Renomear colunas para evitar conflitos
+                rename_dict = {ag_id_col: f"{ag_id_col}_agencia_map"}
+                if ag_name_col and ag_name_col in agencia_map.columns: 
+                    rename_dict[ag_name_col] = "agencia_nome"
+                if ag_cidade_col and ag_cidade_col in agencia_map.columns: 
+                    rename_dict[ag_cidade_col] = "agencia_cidade"
+                if ag_uf_col and ag_uf_col in agencia_map.columns: 
+                    rename_dict[ag_uf_col] = "agencia_uf"
+                if ag_tipo_col and ag_tipo_col in agencia_map.columns: 
+                    rename_dict[ag_tipo_col] = "agencia_tipo"
+                
+                agencia_map_renamed = agencia_map.rename(columns=rename_dict)
+                
+                # Fazer o merge
+                df = df.merge(agencia_map_renamed, 
+                             left_on=agency_id_col, 
+                             right_on=f"{ag_id_col}_agencia_map", 
+                             how="left")
+                
+                # Limpar coluna temporária
+                if f"{ag_id_col}_agencia_map" in df.columns:
+                    df = df.drop(columns=[f"{ag_id_col}_agencia_map"], errors="ignore")
+        except Exception as e:
+            st.error(f"Erro ao processar agências: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
+    else:
+        st.warning("Não foi possível identificar a coluna de ID das agências.")
+else:
+    st.warning("Tabela de agências não disponível para merge.")
     # Identificar colunas relevantes das agências
     ag_id_col = guess_col(agencias, ["cod_agencia", "id", "agencia", "branch", "branch_id"])
     ag_name_col = guess_col(agencias, ["nome", "name", "descricao"])
@@ -667,59 +730,76 @@ with right:
     st.markdown('<div class="section-card"><h4>Top Agências (6 meses)</h4>', unsafe_allow_html=True)
     try:
         tmp = df.copy()
-        if "_dt" in tmp.columns:
-            max_date = tmp["_dt"].max()
-            if pd.notna(max_date):
-                start6 = max_date - pd.DateOffset(months=6)
-                tmp6 = tmp[tmp["_dt"] >= start6]
-            else:
-                tmp6 = tmp  # fallback se max_date for NaT
-        else:
-            tmp6 = tmp
-
-        # Usar a coluna de nome da agência se disponível
-        if "agencia_nome" in tmp6.columns:
+        
+        # Verificar se temos informações de agências
+        if "agencia_nome" in tmp.columns:
             agency_label_col = "agencia_nome"
+            st.success("Usando nomes de agências")
         else:
-            # Fallback: usar ID da agência
+            # Fallback para ID da agência
             agency_id_col = st.session_state.get("agency_id_col")
-            if agency_id_col and agency_id_col in tmp6.columns:
-                tmp6["agencia_nome"] = tmp6[agency_id_col].astype(str)
+            if agency_id_col and agency_id_col in tmp.columns:
+                tmp["agencia_nome"] = tmp[agency_id_col].astype(str)
                 agency_label_col = "agencia_nome"
+                st.info("Usando IDs de agência (nomes não disponíveis)")
             else:
                 agency_label_col = None
+                st.warning("Nenhuma informação de agência disponível")
 
-        if agency_label_col and not tmp6.empty:
-            # Agrupar por agência (usando nome se disponível)
-            ranking6 = tmp6.groupby(agency_label_col).agg(
-                n_transacoes=("_amt", "count"),
-                volume=("_amt", "sum")
-            ).reset_index().sort_values("n_transacoes", ascending=False)
+        if agency_label_col and not tmp.empty:
+            # Filtrar últimos 6 meses
+            if "_dt" in tmp.columns:
+                max_date = tmp["_dt"].max()
+                if pd.notna(max_date):
+                    start6 = max_date - pd.DateOffset(months=6)
+                    tmp6 = tmp[tmp["_dt"] >= start6]
+                else:
+                    tmp6 = tmp
+            else:
+                tmp6 = tmp
+
+            # Agrupar por agência com todas as informações disponíveis
+            group_cols = [agency_label_col]
+            if "agencia_uf" in tmp6.columns: group_cols.append("agencia_uf")
+            if "agencia_tipo" in tmp6.columns: group_cols.append("agencia_tipo")
+            if "agencia_cidade" in tmp6.columns: group_cols.append("agencia_cidade")
             
-            # Renomear colunas para consistência
-            ranking6 = ranking6.rename(columns={agency_label_col: "agencia"})
-
+            ranking6 = tmp6.groupby(group_cols)["_amt"].agg(
+                num_transacoes=("count"),
+                volume_total=("sum")
+            ).reset_index().sort_values("num_transacoes", ascending=False)
+            
             if not ranking6.empty:
                 # Gráfico de top 10
-                top10 = ranking6.head(10).sort_values("n_transacoes", ascending=True)
+                top10 = ranking6.head(10).sort_values("num_transacoes", ascending=True)
+                
+                # Criar label completo para o gráfico
+                if "agencia_uf" in top10.columns and "agencia_tipo" in top10.columns:
+                    top10["agencia_label"] = top10[agency_label_col] + " (" + top10["agencia_uf"] + " - " + top10["agencia_tipo"] + ")"
+                elif "agencia_uf" in top10.columns:
+                    top10["agencia_label"] = top10[agency_label_col] + " (" + top10["agencia_uf"] + ")"
+                else:
+                    top10["agencia_label"] = top10[agency_label_col]
+                
                 fig = px.bar(top10, 
-                            x="n_transacoes", 
-                            y="agencia", 
+                            x="num_transacoes", 
+                            y="agencia_label", 
                             orientation="h",
-                            title="Top 10 - nº transações (6m)", 
-                            labels={"n_transacoes": "Número de Transações", "agencia": "Agência"})
+                            title="Top 10 Agências - nº transações (6m)", 
+                            labels={"num_transacoes": "Número de Transações", "agencia_label": "Agência"},
+                            hover_data=["volume_total"])
                 st.plotly_chart(fig, use_container_width=True)
                 
                 # Tabela de dados
-                ranking_display = ranking6.head(50).copy()
-                ranking_display["volume"] = ranking_display["volume"].round(2)
-                
                 st.dataframe(
-                    ranking_display,
+                    ranking6.head(20),
                     column_config={
-                        "agencia": "Agência",
-                        "n_transacoes": st.column_config.NumberColumn("Nº Transações", format="%d"),
-                        "volume": st.column_config.NumberColumn("Volume", format="R$ %.2f")
+                        agency_label_col: "Agência",
+                        "agencia_uf": "UF",
+                        "agencia_tipo": "Tipo",
+                        "agencia_cidade": "Cidade",
+                        "num_transacoes": st.column_config.NumberColumn("Nº Transações", format="%d"),
+                        "volume_total": st.column_config.NumberColumn("Volume Total", format="R$ %.2f")
                     },
                     use_container_width=True,
                     height=400
