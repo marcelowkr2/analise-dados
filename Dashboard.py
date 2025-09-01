@@ -35,51 +35,91 @@ except Exception:
     except Exception:
         st.warning("Não foi possível configurar o locale para português. As datas serão em inglês.")
 
+# CSS MODERNIZADO
 CSS = """
 <style>
 /* page background */
 [data-testid="stAppViewContainer"]{
-  background: linear-gradient(180deg,#f7fbff 0%, #ffffff 100%);
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
 /* card grid */
 .kpi-grid{
-  display:flex;
-  gap:12px;
-  margin-bottom:12px;
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 .kpi-card{
-  flex:1;
-  background: blue;
-  border-radius: 12px;
-  padding: 18px;
-  box-shadow: 0 6px 18px rgba(28,45,70,0.06);
-  border: 1px solid rgba(16,24,40,0.04);
+  flex: 1;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+  border: none;
+  transition: transform 0.3s ease;
+}
+.kpi-card:hover{
+  transform: translateY(-5px);
 }
 .kpi-title{
-  color:#FFFFFF;
-  font-size:13px;
-  margin-bottom:8px;
+  color: #ffffff;
+  font-size: 14px;
+  margin-bottom: 10px;
+  font-weight: 300;
+  opacity: 0.9;
 }
 .kpi-value{
-  font-size:22px;
-  font-weight:700;
-  color:#FFFFFF;
+  font-size: 20px;
+  font-weight: 300;
+  color: #ffffff;
+  margin: 0;
 }
 .kpi-delta{
-  color:#10b981;
-  font-weight:600;
-  margin-top:6px;
+  color: #10b981;
+  font-weight: 600;
+  margin-top: 8px;
+  font-size: 12px;
 }
 .section-card{
-  background:white;
-  padding:16px;
-  border-radius:10px;
-  box-shadow: 0 6px 18px rgba(28,45,70,0.04);
-  border: 1px solid rgba(16,24,40,0.04);
-  margin-bottom:16px;
+  background: white;
+  padding: 20px;
+  border-radius: 16px;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+  border: none;
+  margin-bottom: 24px;
+}
+.section-header {
+  background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
+  color: white;
+  padding: 15px;
+  border-radius: 12px;
+  margin: 20px 0;
 }
 .small-muted{ color:#6b7280; font-size:13px; }
+
+/* Sidebar styling */
+[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #2c3e50 0%, #3498db 50%);
+}
+[data-testid="stSidebar"] .stSelectbox, 
+[data-testid="stSidebar"] .stDateInput,
+[data-testid="stSidebar"] .stButton {
+  background: white;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+[data-testid="stSidebar"] * {
+color: #FFFFFF !important;   /* branco */
+font-weight: 600;            /* negrito */
+font-size: 16px;             /* tamanho do texto */
+}
+
+/* Metric cards colors */
+.metric-card-1 { background: linear-gradient(135deg, #FF6B6B 0%, #EE5A24 100%) !important; }
+.metric-card-2 { background: linear-gradient(135deg, #36A2EB 0%, #4ECDC4 100%) !important; }
+.metric-card-3 { background: linear-gradient(135deg, #FFD93D 0%, #FF9A3D 100%) !important; }
+.metric-card-4 { background: linear-gradient(135deg, #6A11CB 0%, #2575FC 100%) !important; }
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -567,7 +607,7 @@ if clientes is not None and client_id_col in df.columns:
         # Verificar se já processamos clientes
         client_cols_expected = ['cliente_primeiro_nome', 'cliente_ultimo_nome', 'cliente_email', 
                                'cliente_tipo', 'cliente_cpf', 'cliente_data_nascimento', 
-                               'cliente_endereco', 'cliente_cep', 'cliente_nome_completo']
+                           'cliente_endereco', 'cliente_cep', 'cliente_nome_completo']
         
         already_processed = any(col in df.columns for col in client_cols_expected)
         
@@ -666,7 +706,7 @@ st.session_state["meta_info"] = {
 }
 
 # ---------- Header / KPIs (cards) ----------
-st.title("BanVic Analytics — Dashboard")
+st.title("📊 BanVic Analytics Dashboard")
 st.markdown("Painel interativo com KPIs, ranking de agências, análise de clientes e tendências. Use os filtros na lateral.")
 
 # compute KPIs
@@ -675,28 +715,26 @@ total_vol = float(df["_amt"].sum(skipna=True)) if "_amt" in df.columns else 0.0
 ticket = total_vol / total_trans if total_trans > 0 else 0.0
 aprov_rate = df["_approved"].mean() * 100 if "_approved" in df.columns else np.nan
 
-def kpi_card(title, value, delta=None, fmt=None):
-    delta_html = f'<div class="kpi-delta">{delta}</div>' if delta is not None else ""
+def kpi_card(title, value, card_class="", fmt=None):
     val = f"{value}" if fmt is None else fmt.format(value)
     html = f"""
-    <div class="kpi-card">
+    <div class="kpi-card {card_class}">
       <div class="kpi-title">{title}</div>
       <div class="kpi-value">{val}</div>
-      {delta_html}
     </div>
     """
     return html
 
 cols = st.columns([1,1,1,1])
 with cols[0]:
-    st.markdown(kpi_card("Total de Transações", f"{total_trans:,}".replace(",", ".")), unsafe_allow_html=True)
+    st.markdown(kpi_card("💳 Total de Transações", f"{total_trans:,}".replace(",", "."), "metric-card-1"), unsafe_allow_html=True)
 with cols[1]:
-    st.markdown(kpi_card("Volume Total (R$)", f"{total_vol:,.2f}".replace(",", ".")), unsafe_allow_html=True)
+    st.markdown(kpi_card("💰 Volume Total", f"R$ {total_vol:,.2f}".replace(",", "."), "metric-card-2"), unsafe_allow_html=True)
 with cols[2]:
-    st.markdown(kpi_card("Ticket Médio (R$)", f"{ticket:,.2f}".replace(",", ".")), unsafe_allow_html=True)
+    st.markdown(kpi_card("🎫 Ticket Médio", f"R$ {ticket:,.2f}".replace(",", "."), "metric-card-3"), unsafe_allow_html=True)
 with cols[3]:
     aprov_display = f"{aprov_rate:.1f}%" if not np.isnan(aprov_rate) else "N/A"
-    st.markdown(kpi_card("Taxa de Aprovação", aprov_display), unsafe_allow_html=True)
+    st.markdown(kpi_card("✅ Taxa de Aprovação", aprov_display, "metric-card-4"), unsafe_allow_html=True)
 
 st.markdown("---")
 
@@ -704,17 +742,17 @@ st.markdown("---")
 left, right = st.columns([1.1, 2.8])
 
 with left:
-    st.markdown('<div class="section-card"> <h4>Resumo Rápido</h4>', unsafe_allow_html=True)
+    st.markdown('<div class="section-card"> <h4>📋 Resumo Rápido</h4>', unsafe_allow_html=True)
     if date_range and len(date_range) == 2:
-        st.write(f"Período: **{format_date_pt_br(start)}** → **{format_date_pt_br(end)}**")
-    st.write(f"Agência: **{sel_ag}**")
-    st.write(f"Clientes (filtro): **{sel_client}**")
+        st.write(f"**📅 Período:** {format_date_pt_br(start)} → {format_date_pt_br(end)}")
+    st.write(f"**🏢 Agência:** {sel_ag}")
+    st.write(f"**👥 Clientes (filtro):** {sel_client}")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown('<div class="section-card"> <h4>Exportar</h4>', unsafe_allow_html=True)
+    st.markdown('<div class="section-card"> <h4>📤 Exportar</h4>', unsafe_allow_html=True)
     st.write("Exportar relatório PDF com os dados e gráficos do período e filtros aplicados.")
 
-    if st.button("Gerar e baixar PDF"):
+    if st.button("📊 Gerar Relatório PDF", use_container_width=True):
         try:
             pdf_buffer = generate_comprehensive_pdf(
                 df=df,
@@ -731,136 +769,203 @@ with left:
                 label="📥 Baixar Relatório PDF Completo",
                 data=pdf_buffer,
                 file_name=f"Relatorio_BanVic_{start.strftime('%d-%m-%Y')}_{end.strftime('%d-%m-%Y')}.pdf",
-                mime="application/pdf"
+                mime="application/pdf",
+                use_container_width=True
             )
 
         except Exception as e:
             st.error(f"Erro ao gerar PDF: {str(e)}")
-            st.error("Detalhes do erro:")
             st.code(traceback.format_exc())
 
     st.markdown("</div>", unsafe_allow_html=True)
 
 with right:
-    st.markdown('<div class="section-card"><h4>Volume Mensal</h4>', unsafe_allow_html=True)
+    # GRÁFICO DE VOLUME MENSAL MELHORADO
+    st.markdown('<div class="section-card"><h4>📈 Volume Mensal</h4>', unsafe_allow_html=True)
     if df.empty:
         st.warning("Sem dados no período selecionado.")
     else:
-        # prepare monthly chart
         if "_dt" in df.columns and "_amt" in df.columns:
             df["_month"] = df["_dt"].dt.to_period("M").dt.to_timestamp()
             monthly = df.groupby("_month")["_amt"].sum().reset_index().sort_values("_month")
-            monthly["_month_str"] = monthly["_month"].dt.strftime("%m/%Y")
-            fig = px.line(monthly, x="_month_str", y="_amt", markers=True, title="Volume Mensal")
-            fig.update_layout(xaxis_title="Mês", yaxis_title="Volume (R$)")
+            monthly["_month_str"] = monthly["_month"].dt.strftime("%b/%Y")
+            
+            fig = px.area(monthly, x="_month_str", y="_amt", 
+                         title="Evolução do Volume Mensal",
+                         labels={"_month_str": "Mês", "_amt": "Volume (R$)"},
+                         color_discrete_sequence=['#4ECDC4'])
+            
+            fig.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(size=12),
+                height=400,
+                hovermode='x unified'
+            )
+            fig.update_traces(mode='lines+markers', marker=dict(size=8))
+            
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Dados incompletos para gráfico mensal.")
     st.markdown("</div>", unsafe_allow_html=True)
-    st.session_state['is_analysis_page'] = False
-    st.markdown('<div class="section-card"><h4>Top 10 Agências</h4>', unsafe_allow_html=True)
 
-try:
-    # USAR DADOS COMPLETOS SEM FILTRO DE AGÊNCIA para o ranking
-    tmp = st.session_state["df_unfiltered"].copy()
+    # TOP 10 AGÊNCIAS MELHORADO
+    st.markdown('<div class="section-card"><h4>🏆 Top 10 Agências</h4>', unsafe_allow_html=True)
     
-    # Debug: Verificar quantas agências temos nos dados
-    st.sidebar.info(f"Dados totais: {len(tmp)} transações")
-    if "agencia_nome" in tmp.columns:
-        st.sidebar.info(f"Agências únicas: {tmp['agencia_nome'].nunique()}")
-    
-    # Garantir que temos coluna de agência
-    if "agencia_nome" not in tmp.columns:
-        # Tentar criar a coluna agencia_nome se não existir
-        agency_id_col = st.session_state.get("meta_info", {}).get("agency_id_col")
-        if agency_id_col and agency_id_col in tmp.columns:
-            tmp["agencia_nome"] = "Agência " + tmp[agency_id_col].astype(str)
+    try:
+        tmp = st.session_state["df_unfiltered"].copy()
+        
+        if "agencia_nome" not in tmp.columns:
+            agency_id_col = st.session_state.get("meta_info", {}).get("agency_id_col")
+            if agency_id_col and agency_id_col in tmp.columns:
+                tmp["agencia_nome"] = "Agência " + tmp[agency_id_col].astype(str)
+
+        if "agencia_nome" in tmp.columns:
+            tmp = tmp[tmp["agencia_nome"].notna() & (tmp["agencia_nome"].str.strip() != "")]
+            
+            ranking = tmp.groupby("agencia_nome").agg(
+                num_transacoes=("_amt", "count"),
+                volume_total=("_amt", "sum"),
+                ticket_medio=("_amt", "mean")
+            ).reset_index().sort_values("volume_total", ascending=False)
+
+            top10 = ranking.head(10)
+
+            # Gráfico de barras horizontais
+            fig = px.bar(
+                top10.sort_values("volume_total", ascending=True),
+                x="volume_total",
+                y="agencia_nome",
+                orientation='h',
+                title="Top 10 Agências por Volume Financeiro",
+                labels={"volume_total": "Volume Total (R$)", "agencia_nome": "Agência"},
+                color="num_transacoes",
+                color_continuous_scale='Viridis',
+                hover_data=["num_transacoes", "ticket_medio"]
+            )
+            
+            fig.update_layout(
+                height=500,
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                yaxis={'categoryorder':'total ascending'}
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Tabela interativa
+            st.subheader("📊 Detalhes do Ranking")
+            
+            top10_display = top10.copy()
+            top10_display["volume_total"] = top10_display["volume_total"].apply(lambda x: f"R$ {x:,.2f}")
+            top10_display["ticket_medio"] = top10_display["ticket_medio"].apply(lambda x: f"R$ {x:,.2f}")
+            
+            st.dataframe(
+                top10_display,
+                use_container_width=True,
+                column_config={
+                    "agencia_nome": "Agência",
+                    "num_transacoes": "Transações",
+                    "volume_total": "Volume Total",
+                    "ticket_medio": "Ticket Médio"
+                },
+                hide_index=True
+            )
         else:
-            st.error("Coluna de agência não encontrada nos dados")
-            st.markdown("</div>", unsafe_allow_html=True)
-            raise ValueError("Coluna de agência não disponível")
+            st.info("Informações de agência não disponíveis para ranking.")
 
-    # Filtrar apenas agências com nome válido
-    tmp = tmp[tmp["agencia_nome"].notna() & (tmp["agencia_nome"].str.strip() != "")]
+    except Exception as e:
+        st.error(f"Erro ao calcular ranking: {str(e)}")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # SAZONALIDADE MELHORADA
+    st.markdown('<div class="section-card"><h4>📅 Sazonalidade - Dia da Semana</h4>', unsafe_allow_html=True)
     
-    if tmp.empty:
-        st.info("Nenhum dado válido de agência disponível.")
-    else:
-        # Agrupar por agência
-        ranking = tmp.groupby("agencia_nome").agg(
-            num_transacoes=("_amt", "count"),
-            volume_total=("_amt", "sum")
-        ).reset_index().sort_values("num_transacoes", ascending=False)
-
-        # Top 10 por número de transações
-        top10 = ranking.head(10)
-        
-        # Debug: Mostrar informações no sidebar
-        st.sidebar.write("**Top 3 agências:**")
-        for i, row in top10.head(3).iterrows():
-            st.sidebar.write(f"{i+1}. {row['agencia_nome']}: {row['num_transacoes']} transações")
-
-        # Gráfico Top 10 - Horizontal
-        fig = px.bar(
-            top10.sort_values("num_transacoes", ascending=True),
-            x="num_transacoes",
-            y="agencia_nome",
-            orientation='h',
-            title="Top 10 Agências por Número de Transações",
-            labels={"num_transacoes": "Número de Transações", "agencia_nome": "Agência"},
-            hover_data=["volume_total"],
-            color="num_transacoes",
-            color_continuous_scale="blues"
-        )
-        fig.update_layout(
-            yaxis={'categoryorder':'total ascending'},
-            height=500
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Tabela detalhada
-        st.subheader("Detalhes do Ranking")
-        
-        # Formatar valores
-        top10_display = top10.copy()
-        top10_display["volume_total"] = top10_display["volume_total"].apply(lambda x: f"R$ {x:,.2f}")
-        top10_display["num_transacoes"] = top10_display["num_transacoes"].apply(lambda x: f"{x:,.0f}")
-        
-        st.dataframe(
-            top10_display,
-            use_container_width=True,
-            column_config={
-                "agencia_nome": st.column_config.TextColumn("Agência", width="large"),
-                "num_transacoes": st.column_config.TextColumn("Transações"),
-                "volume_total": st.column_config.TextColumn("Volume Total")
-            },
-            hide_index=True
-        )
-
-except Exception as e:
-    st.error(f"Erro ao calcular ranking de agências: {str(e)}")
-    st.error("Detalhes do erro:")
-    st.code(traceback.format_exc())
-
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.error(f"Erro ao calcular top agências: {str(e)}")
-    st.code(traceback.format_exc())
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown('<div class="section-card"><h4>Sazonalidade - Dia da Semana</h4>', unsafe_allow_html=True)
     try:
         if "_dt" in df.columns and "_amt" in df.columns:
-            df["_weekday_pt"] = df["_dt"].dt.dayofweek.map({0:"segunda-feira",1:"terça-feira",2:"quarta-feira",3:"quinta-feira",4:"sexta-feira",5:"sábado",6:"domingo"})
-            weekly = df.groupby("_weekday_pt")["_amt"].agg(["count","sum"]).reset_index().rename(columns={"count":"n_trans","sum":"volume"})
-            order = ["segunda-feira","terça-feira","quarta-feira","quinta-feira","sexta-feira","sábado","domingo"]
-            weekly["_ord"] = weekly["_weekday_pt"].apply(lambda x: order.index(x) if x in order else 99)
-            weekly = weekly.sort_values("_ord")
-            st.plotly_chart(px.bar(weekly, x="_weekday_pt", y="volume", title="Volume por Dia da Semana"), use_container_width=True)
+            dias_semana = {
+                0: "Segunda", 1: "Terça", 2: "Quarta", 
+                3: "Quinta", 4: "Sexta", 5: "Sábado", 6: "Domingo"
+            }
+            
+            df["_weekday"] = df["_dt"].dt.dayofweek.map(dias_semana)
+            weekly = df.groupby("_weekday")["_amt"].agg(["count", "sum", "mean"]).reset_index()
+            weekly.columns = ["Dia da Semana", "Transações", "Volume", "Ticket Médio"]
+            
+            # Ordenar pelos dias da semana
+            ordem_dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+            weekly["Dia da Semana"] = pd.Categorical(weekly["Dia da Semana"], categories=ordem_dias, ordered=True)
+            weekly = weekly.sort_values("Dia da Semana")
+            
+            fig = px.bar(weekly, x="Dia da Semana", y="Volume", 
+                        title="Volume por Dia da Semana",
+                        labels={"Volume": "Volume (R$)", "Dia da Semana": "Dia da Semana"},
+                        color="Transações",
+                        color_continuous_scale='Blues')
+            
+            fig.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                height=400
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Métricas adicionais
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("📈 Maior Volume", f"R$ {weekly['Volume'].max():,.2f}")
+            with col2:
+                st.metric("📉 Menor Volume", f"R$ {weekly['Volume'].min():,.2f}")
+            with col3:
+                st.metric("⚖️ Variação", f"{(weekly['Volume'].max()/weekly['Volume'].min()-1)*100:.1f}%")
+                
         else:
-            st.info("Dados insuficientes para sazonalidade.")
+            st.info("Dados insuficientes para análise de sazonalidade.")
+            
     except Exception as e:
-        st.error("Erro sazonalidade: " + str(e))
+        st.error(f"Erro na análise de sazonalidade: {str(e)}")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # NOVA SEÇÃO: DISTRIBUIÇÃO DE TRANSACOES
+    st.markdown('<div class="section-card"><h4>📊 Distribuição de Transações</h4>', unsafe_allow_html=True)
+    
+    try:
+        if "_amt" in df.columns:
+            # Histograma de valores
+            fig = px.histogram(df, x="_amt", nbins=20, 
+                             title="Distribuição dos Valores das Transações",
+                             labels={"_amt": "Valor da Transação (R$)"},
+                             color_discrete_sequence=['#FF6B6B'])
+            
+            fig.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                height=400,
+                showlegend=False
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Estatísticas
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Mínimo", f"R$ {df['_amt'].min():.2f}")
+            with col2:
+                st.metric("Máximo", f"R$ {df['_amt'].max():.2f}")
+            with col3:
+                st.metric("Mediana", f"R$ {df['_amt'].median():.2f}")
+            with col4:
+                st.metric("Desvio Padrão", f"R$ {df['_amt'].std():.2f}")
+                
+        else:
+            st.info("Dados insuficientes para análise de distribuição.")
+            
+    except Exception as e:
+        st.error(f"Erro na análise de distribuição: {str(e)}")
+    
     st.markdown("</div>", unsafe_allow_html=True)
 
 

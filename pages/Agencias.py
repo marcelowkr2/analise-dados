@@ -1,10 +1,92 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime
 import numpy as np
 
 st.set_page_config(page_title="Agências | BanVic", layout="wide")
+
+# CSS MODERNIZADO
+st.markdown("""
+<style>
+    .metric-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        padding: 20px;
+        color: white;
+        text-align: center;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        margin-bottom: 16px;
+    }
+    .metric-title {
+        font-size: 14px;
+        font-weight: 300;
+        margin-bottom: 10px;
+        opacity: 0.9;
+    }
+    .metric-value {
+        font-size: 20px;
+        font-weight: 700;
+        color: #ffffff;
+        margin: 0;
+    }
+    .section-card {
+        background: white;
+        padding: 20px;
+        border-radius: 16px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+        margin-bottom: 24px;
+        border: none;
+    }
+    .section-header {
+        background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
+        color: white;
+        padding: 15px;
+        border-radius: 12px;
+        margin: 20px 0;
+    }
+            
+            /* Sidebar styling */
+[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #2c3e50 0%, #3498db 50%);
+}
+ [data-testid="stSidebar"] * {
+        color: #000000 !important;
+    }            
+        
+[data-testid="stSidebar"] .stSelectbox, 
+[data-testid="stSidebar"] .stDateInput,
+[data-testid="stSidebar"] .stButton {
+  background: white;
+  border-radius: 8px;
+  padding: 8px;
+}
+            
+[data-testid="stSidebar"] * {
+color: #FFFFFF !important;   /* branco */
+font-weight: 600;            /* negrito */
+font-size: 16px;             /* tamanho do texto */
+}
+    
+    /* Cores temáticas para métricas */
+    .metric-card-1 { background: linear-gradient(135deg, #FF6B6B 0%, #EE5A24 100%) !important; }
+    .metric-card-2 { background: linear-gradient(135deg, #36A2EB 0%, #4ECDC4 100%) !important; }
+    .metric-card-3 { background: linear-gradient(135deg, #FFD93D 0%, #FF9A3D 100%) !important; }
+    .metric-card-4 { background: linear-gradient(135deg, #6A11CB 0%, #2575FC 100%) !important; }
+    .metric-card-5 { background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%) !important; }
+    .metric-card-6 { background: linear-gradient(135deg, #ff5e62 0%, #ff9966 100%) !important; }
+</style>
+""", unsafe_allow_html=True)
+
+def kpi_card(title, value, card_class=""):
+    html = f"""
+    <div class="metric-card {card_class}">
+        <div class="metric-title">{title}</div>
+        <div class="metric-value">{value}</div>
+    </div>
+    """
+    return html
 
 def load_data_directly():
     """Carrega dados diretamente para evitar problemas de filtro"""
@@ -49,7 +131,7 @@ else:
     amount_col = "_amt"
     date_col = "_dt"
 
-st.title("📊 Análise Detalhada por Agência")
+st.title("🏢 Análise Detalhada por Agência")
 
 # Verificar se temos informações das agências
 agencia_cols = [col for col in df.columns if col.startswith('agencia_')]
@@ -98,27 +180,24 @@ agrupamento = last6.groupby(group_cols).agg(
 agrupamento["percentual_saques"] = (agrupamento["total_saques"] / agrupamento["num_transacoes"] * 100).round(1)
 agrupamento["saldo_liquido"] = agrupamento["volume_total_positivo"] + agrupamento["volume_total_negativo"]
 
-# Resto do código permanece igual a partir daqui...
-# [O restante do código que eu forneci anteriormente continua igual]
+st.markdown('<div class="section-header"><h3>📊 Métricas Principais</h3></div>', unsafe_allow_html=True)
 
-st.subheader("📈 Métricas por Agência - Últimos 6 meses")
-
-# KPIs principais
+# KPIs principais em cards modernos
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("Total Agências", f"{len(agrupamento):,}")
+    st.markdown(kpi_card("🏢 Total Agências", f"{len(agrupamento):,}", "metric-card-1"), unsafe_allow_html=True)
 with col2:
     total_trans = agrupamento["num_transacoes"].sum()
-    st.metric("Total Transações", f"{total_trans:,}")
+    st.markdown(kpi_card("💳 Total Transações", f"{total_trans:,}", "metric-card-2"), unsafe_allow_html=True)
 with col3:
     total_saques = agrupamento["total_saques"].sum()
-    st.metric("Total Saques", f"{total_saques:,}")
+    st.markdown(kpi_card("💰 Total Saques", f"{total_saques:,}", "metric-card-3"), unsafe_allow_html=True)
 with col4:
     total_arrecadacao = agrupamento["arrecadacao_total"].sum()
-    st.metric("Arrecadação Total", f"R$ {total_arrecadacao:,.2f}")
+    st.markdown(kpi_card("📈 Arrecadação Total", f"R$ {total_arrecadacao:,.2f}", "metric-card-4"), unsafe_allow_html=True)
 
 # Filtros
-st.subheader("🔍 Filtros")
+st.markdown('<div class="section-header"><h3>🔍 Filtros</h3></div>', unsafe_allow_html=True)
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
@@ -177,7 +256,7 @@ elif ordenacao == "Arrecadação (↑)":
 elif ordenacao == "Ticket Médio (↑)":
     agrupamento_filtrado = agrupamento_filtrado.sort_values("ticket_medio", ascending=True)
 
-st.subheader(f"🏆 Todas as Agências ({len(agrupamento_filtrado)} agências)")
+st.markdown('<div class="section-header"><h3>🏆 Ranking de Agências</h3></div>', unsafe_allow_html=True)
 
 # Tabela completa com TODAS as agências
 agrupamento_display = agrupamento_filtrado.copy()
@@ -242,12 +321,12 @@ st.download_button(
     label="📥 Download CSV Completo",
     data=csv,
     file_name="detalhes_agencias_completo.csv",
-    mime="text/csv"
+    mime="text/csv",
+    use_container_width=True
 )
 
 # Gráficos comparativos
-st.markdown("---")
-st.subheader("📊 Visualizações Comparativas")
+st.markdown('<div class="section-header"><h3>📊 Visualizações Comparativas</h3></div>', unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
 
@@ -259,7 +338,16 @@ with col1:
                  y=agencia_nome_col, 
                  orientation="h", 
                  title="Top 20 Agências - Nº de Transações",
-                 labels={"num_transacoes": "Nº Transações", agencia_nome_col: "Agência"})
+                 labels={"num_transacoes": "Nº Transações", agencia_nome_col: "Agência"},
+                 color="num_transacoes",
+                 color_continuous_scale='Blues')
+    
+    fig1.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        height=400
+    )
+    
     st.plotly_chart(fig1, use_container_width=True)
 
 with col2:
@@ -270,11 +358,21 @@ with col2:
                  y=agencia_nome_col, 
                  orientation="h", 
                  title="Top 20 Agências - Arrecadação",
-                 labels={"arrecadacao_total": "Arrecadação (R$)", agencia_nome_col: "Agência"})
+                 labels={"arrecadacao_total": "Arrecadação (R$)", agencia_nome_col: "Agência"},
+                 color="arrecadacao_total",
+                 color_continuous_scale='Viridis')
+    
+    fig2.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        height=400
+    )
+    
     st.plotly_chart(fig2, use_container_width=True)
 
 # Scatter plot comparativo
-st.subheader("📈 Relação entre Transações e Arrecadação")
+st.markdown('<div class="section-header"><h3>📈 Relação entre Transações e Arrecadação</h3></div>', unsafe_allow_html=True)
+
 fig3 = px.scatter(agrupamento_filtrado, 
                  x="num_transacoes", 
                  y="arrecadacao_total",
@@ -288,12 +386,18 @@ fig3 = px.scatter(agrupamento_filtrado,
                      "ticket_medio": "Ticket Médio",
                      agencia_uf_col: "UF" if agencia_uf_col else None
                  })
+    
+fig3.update_layout(
+    plot_bgcolor='rgba(0,0,0,0)',
+    paper_bgcolor='rgba(0,0,0,0)',
+    height=500
+)
+
 st.plotly_chart(fig3, use_container_width=True)
 
 # Análise por UF se disponível
 if agencia_uf_col:
-    st.markdown("---")
-    st.subheader("🗺️ Análise por UF")
+    st.markdown('<div class="section-header"><h3>🗺️ Análise por UF</h3></div>', unsafe_allow_html=True)
     
     por_uf = agrupamento_filtrado.groupby(agencia_uf_col).agg(
         num_agencias=(agencia_nome_col, "nunique"),
@@ -307,49 +411,84 @@ if agencia_uf_col:
     with col1:
         fig4 = px.bar(por_uf, x=agencia_uf_col, y="num_agencias",
                      title="Número de Agências por UF",
-                     labels={agencia_uf_col: "UF", "num_agencias": "Nº Agências"})
+                     labels={agencia_uf_col: "UF", "num_agencias": "Nº Agências"},
+                     color="num_agencias",
+                     color_continuous_scale='Purples')
+        
+        fig4.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            height=400
+        )
+        
         st.plotly_chart(fig4, use_container_width=True)
     
     with col2:
         fig5 = px.bar(por_uf, x=agencia_uf_col, y="total_arrecadacao",
                      title="Arrecadação Total por UF",
-                     labels={agencia_uf_col: "UF", "total_arrecadacao": "Arrecadação Total (R$)"})
+                     labels={agencia_uf_col: "UF", "total_arrecadacao": "Arrecadação Total (R$)"},
+                     color="total_arrecadacao",
+                     color_continuous_scale='Greens')
+        
+        fig5.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            height=400
+        )
+        
         st.plotly_chart(fig5, use_container_width=True)
 
 # Estatísticas gerais
-st.markdown("---")
-st.subheader("📊 Estatísticas Gerais das Agências")
+st.markdown('<div class="section-header"><h3>📊 Estatísticas Gerais</h3></div>', unsafe_allow_html=True)
 
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.metric("Média Transações/Agência", f"{agrupamento_filtrado['num_transacoes'].mean():.0f}")
+    st.markdown(kpi_card("📊 Média Transações/Agência", f"{agrupamento_filtrado['num_transacoes'].mean():.0f}", "metric-card-1"), unsafe_allow_html=True)
 with col2:
-    st.metric("Média Arrecadação/Agência", f"R$ {agrupamento_filtrado['arrecadacao_total'].mean():,.2f}")
+    st.markdown(kpi_card("💰 Média Arrecadação/Agência", f"R$ {agrupamento_filtrado['arrecadacao_total'].mean():,.2f}", "metric-card-2"), unsafe_allow_html=True)
 with col3:
-    st.metric("Média Ticket Médio", f"R$ {agrupamento_filtrado['ticket_medio'].mean():,.2f}")
+    st.markdown(kpi_card("🎫 Média Ticket Médio", f"R$ {agrupamento_filtrado['ticket_medio'].mean():,.2f}", "metric-card-3"), unsafe_allow_html=True)
 with col4:
-    st.metric("Taxa Média de Saques", f"{agrupamento_filtrado['percentual_saques'].mean():.1f}%")
+    st.markdown(kpi_card("📉 Taxa Média de Saques", f"{agrupamento_filtrado['percentual_saques'].mean():.1f}%", "metric-card-4"), unsafe_allow_html=True)
 
 # Distribuição dos valores
-st.subheader("📊 Distribuição dos Valores")
+st.markdown('<div class="section-header"><h3>📈 Distribuição dos Valores</h3></div>', unsafe_allow_html=True)
+
 col1, col2 = st.columns(2)
 
 with col1:
     fig6 = px.histogram(agrupamento_filtrado, x="num_transacoes", 
                        title="Distribuição do Número de Transações",
-                       labels={"num_transacoes": "Nº Transações", "count": "Nº Agências"})
+                       labels={"num_transacoes": "Nº Transações", "count": "Nº Agências"},
+                       color_discrete_sequence=['#FF6B6B'])
+    
+    fig6.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        height=400,
+        showlegend=False
+    )
+    
     st.plotly_chart(fig6, use_container_width=True)
 
 with col2:
     fig7 = px.histogram(agrupamento_filtrado, x="arrecadacao_total", 
                        title="Distribuição da Arrecadação",
-                       labels={"arrecadacao_total": "Arrecadação (R$)", "count": "Nº Agências"})
+                       labels={"arrecadacao_total": "Arrecadação (R$)", "count": "Nº Agências"},
+                       color_discrete_sequence=['#36A2EB'])
+    
+    fig7.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        height=400,
+        showlegend=False
+    )
+    
     st.plotly_chart(fig7, use_container_width=True)
 
 # Busca rápida por agência específica
-st.markdown("---")
-st.subheader("🔍 Buscar Agência Específica")
+st.markdown('<div class="section-header"><h3>🔍 Buscar Agência Específica</h3></div>', unsafe_allow_html=True)
 
 if agencia_nome_col:
     agencia_busca = st.selectbox("Digite o nome da agência:", 
@@ -363,18 +502,27 @@ if agencia_nome_col:
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("Ranking", f"#{agrupamento_filtrado[agrupamento_filtrado[agencia_nome_col] == agencia_busca].index[0] + 1}")
-            st.metric("Nº Transações", f"{agencia_info['num_transacoes']:,}")
+            st.markdown(kpi_card("🏆 Ranking", f"#{agrupamento_filtrado[agrupamento_filtrado[agencia_nome_col] == agencia_busca].index[0] + 1}", "metric-card-1"), unsafe_allow_html=True)
+            st.markdown(kpi_card("💳 Nº Transações", f"{agencia_info['num_transacoes']:,}", "metric-card-2"), unsafe_allow_html=True)
         
         with col2:
-            st.metric("Arrecadação Total", f"R$ {agencia_info['arrecadacao_total']:,.2f}")
-            st.metric("Ticket Médio", f"R$ {agencia_info['ticket_medio']:,.2f}")
+            st.markdown(kpi_card("💰 Arrecadação Total", f"R$ {agencia_info['arrecadacao_total']:,.2f}", "metric-card-3"), unsafe_allow_html=True)
+            st.markdown(kpi_card("🎫 Ticket Médio", f"R$ {agencia_info['ticket_medio']:,.2f}", "metric-card-4"), unsafe_allow_html=True)
         
         with col3:
-            st.metric("Total Saques", f"{agencia_info['total_saques']:,}")
-            st.metric("% Saques", f"{agencia_info['percentual_saques']}%")
+            st.markdown(kpi_card("📉 Total Saques", f"{agencia_info['total_saques']:,}", "metric-card-5"), unsafe_allow_html=True)
+            st.markdown(kpi_card("📊 % Saques", f"{agencia_info['percentual_saques']}%", "metric-card-6"), unsafe_allow_html=True)
         
         with col4:
-            st.metric("Saldo Líquido", f"R$ {agencia_info['saldo_liquido']:,.2f}")
+            st.markdown(kpi_card("⚖️ Saldo Líquido", f"R$ {agencia_info['saldo_liquido']:,.2f}", "metric-card-1"), unsafe_allow_html=True)
             if agencia_uf_col:
-                st.metric("UF", agencia_info[agencia_uf_col])
+                st.markdown(kpi_card("📍 UF", agencia_info[agencia_uf_col], "metric-card-2"), unsafe_allow_html=True)
+
+# Footer
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; color: #666; padding: 20px;'>
+    <p>© 2024 BanVic — Análise de Agências</p>
+    <p>Desenvolvido por Marcelo Pires | 📊 Painel de Business Intelligence</p>
+</div>
+""", unsafe_allow_html=True)

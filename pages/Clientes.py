@@ -1,9 +1,88 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime
+import numpy as np
 
 st.set_page_config(page_title="Clientes | BanVic", layout="wide")
+
+# CSS MODERNIZADO
+st.markdown("""
+<style>
+    .metric-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        padding: 20px;
+        color: white;
+        text-align: center;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        margin-bottom: 16px;
+    }
+    .metric-title {
+        font-size: 14px;
+        font-weight: 300;
+        margin-bottom: 10px;
+        opacity: 0.9;
+    }
+    .metric-value {
+        font-size: 20px;
+        font-weight: 400;
+        color: #ffffff;
+        margin: 0;
+    }
+    .section-card {
+        background: white;
+        padding: 20px;
+        border-radius: 16px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+        margin-bottom: 24px;
+        border: none;
+    }
+    .section-header {
+        background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
+        color: white;
+        padding: 15px;
+        border-radius: 12px;
+        margin: 20px 0;
+    }
+            
+            /* Sidebar styling */
+    [data-testid="stSidebar"] {
+      background: linear-gradient(180deg, #2c3e50 0%, #3498db 50%);
+    }
+    [data-testid="stSidebar"] .stSelectbox, 
+    [data-testid="stSidebar"] .stDateInput,
+    [data-testid="stSidebar"] .stButton {
+      background: white;
+      border-radius: 8px;
+      padding: 8px;
+    }
+            
+    [data-testid="stSidebar"] * {
+    color: #FFFFFF !important;   /* branco */
+    font-weight: 600;            /* negrito */
+    font-size: 16px;             /* tamanho do texto */
+    }
+    
+    /* Cores temáticas para métricas */
+    .metric-card-1 { background: linear-gradient(135deg, #FF6B6B 0%, #EE5A24 100%) !important; }
+    .metric-card-2 { background: linear-gradient(135deg, #36A2EB 0%, #4ECDC4 100%) !important; }
+    .metric-card-3 { background: linear-gradient(135deg, #FFD93D 0%, #FF9A3D 100%) !important; }
+    .metric-card-4 { background: linear-gradient(135deg, #6A11CB 0%, #2575FC 100%) !important; }
+    .metric-card-5 { background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%) !important; }
+    .metric-card-6 { background: linear-gradient(135deg, #ff5e62 0%, #ff9966 100%) !important; }
+</style>
+""", unsafe_allow_html=True)
+
+def kpi_card(title, value, card_class=""):
+    html = f"""
+    <div class="metric-card {card_class}">
+        <div class="metric-title">{title}</div>
+        <div class="metric-value">{value}</div>
+    </div>
+    """
+    return html
 
 # Verificar se as variáveis de sessão existem
 if "df_filtered" not in st.session_state:
@@ -101,21 +180,21 @@ if not df.empty and "client_label" in df.columns:
     clientes_completos = clientes_completos.sort_values("volume_total", ascending=False)
 
     # Estatísticas básicas
-    st.subheader("📊 Métricas Gerais")
+    st.markdown('<div class="section-header"><h3>📊 Métricas Gerais</h3></div>', unsafe_allow_html=True)
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total de Clientes", f"{len(clientes_completos):,}")
+        st.markdown(kpi_card("👥 Total de Clientes", f"{len(clientes_completos):,}", "metric-card-1"), unsafe_allow_html=True)
     with col2:
-        st.metric("Volume Total", f"R$ {clientes_completos['volume_total'].sum():,.2f}")
+        st.markdown(kpi_card("💰 Volume Total", f"R$ {clientes_completos['volume_total'].sum():,.2f}", "metric-card-2"), unsafe_allow_html=True)
     with col3:
         avg_trans = clientes_completos['n_transacoes'].mean()
-        st.metric("Média Transações/Cliente", f"{avg_trans:.1f}")
+        st.markdown(kpi_card("💳 Média Transações/Cliente", f"{avg_trans:.1f}", "metric-card-3"), unsafe_allow_html=True)
     with col4:
-        st.metric("Ticket Médio", f"R$ {clientes_completos['ticket_medio'].mean():,.2f}")
+        st.markdown(kpi_card("🎫 Ticket Médio", f"R$ {clientes_completos['ticket_medio'].mean():,.2f}", "metric-card-4"), unsafe_allow_html=True)
 
     # Filtros
-    st.subheader("🔍 Filtros")
+    st.markdown('<div class="section-header"><h3>🔍 Filtros</h3></div>', unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -158,7 +237,7 @@ if not df.empty and "client_label" in df.columns:
         else:
             clientes_filtrados = clientes_filtrados[clientes_filtrados["volume_total"] > 10000]
 
-    st.subheader("🏆 Top Clientes por Volume")
+    st.markdown('<div class="section-header"><h3>🏆 Top Clientes por Volume</h3></div>', unsafe_allow_html=True)
     
     # Gráfico de top clientes
     top_clientes = clientes_filtrados.head(top_n).sort_values("volume_total", ascending=True)
@@ -175,13 +254,21 @@ if not df.empty and "client_label" in df.columns:
                  orientation='h',
                  title=f"Top {top_n} Clientes por Volume",
                  labels={"volume_total": "Volume Total (R$)", "client_label": "Cliente"},
-                 hover_data=hover_columns)
+                 hover_data=hover_columns,
+                 color="volume_total",
+                 color_continuous_scale='Viridis')
+    
+    fig1.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        height=500
+    )
     
     st.plotly_chart(fig1, use_container_width=True)
 
     # Análise por tipo de cliente
     if "cliente_tipo" in clientes_filtrados.columns:
-        st.subheader("📈 Análise por Tipo de Cliente")
+        st.markdown('<div class="section-header"><h3>📈 Análise por Tipo de Cliente</h3></div>', unsafe_allow_html=True)
         
         por_tipo = clientes_filtrados.groupby("cliente_tipo").agg(
             num_clientes=("client_label", "count"),
@@ -193,18 +280,35 @@ if not df.empty and "client_label" in df.columns:
         
         with col1:
             fig2 = px.pie(por_tipo, values="volume_total", names="cliente_tipo",
-                         title="Distribuição de Volume por Tipo")
+                         title="Distribuição de Volume por Tipo",
+                         color_discrete_sequence=px.colors.qualitative.Set3)
+            
+            fig2.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                height=400
+            )
+            
             st.plotly_chart(fig2, use_container_width=True)
         
         with col2:
             fig3 = px.bar(por_tipo, x="cliente_tipo", y="num_clientes",
                          title="Número de Clientes por Tipo",
-                         labels={"cliente_tipo": "Tipo", "num_clientes": "Nº Clientes"})
+                         labels={"cliente_tipo": "Tipo", "num_clientes": "Nº Clientes"},
+                         color="num_clientes",
+                         color_continuous_scale='Blues')
+            
+            fig3.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                height=400
+            )
+            
             st.plotly_chart(fig3, use_container_width=True)
 
     # Análise por UF se disponível
     if "cliente_uf" in clientes_filtrados.columns:
-        st.subheader("🗺️ Análise por Estado (UF)")
+        st.markdown('<div class="section-header"><h3>🗺️ Análise por Estado (UF)</h3></div>', unsafe_allow_html=True)
         
         por_uf = clientes_filtrados.groupby("cliente_uf").agg(
             num_clientes=("client_label", "count"),
@@ -218,18 +322,36 @@ if not df.empty and "client_label" in df.columns:
             fig4 = px.bar(por_uf.sort_values("volume_total", ascending=False).head(10),
                          x="cliente_uf", y="volume_total",
                          title="Top 10 Estados por Volume",
-                         labels={"volume_total": "Volume Total (R$)", "cliente_uf": "UF"})
+                         labels={"volume_total": "Volume Total (R$)", "cliente_uf": "UF"},
+                         color="volume_total",
+                         color_continuous_scale='Greens')
+            
+            fig4.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                height=400
+            )
+            
             st.plotly_chart(fig4, use_container_width=True)
         
         with col2:
             fig5 = px.bar(por_uf.sort_values("num_clientes", ascending=False).head(10),
                          x="cliente_uf", y="num_clientes",
                          title="Top 10 Estados por Nº de Clientes",
-                         labels={"cliente_uf": "UF", "num_clientes": "Nº Clientes"})
+                         labels={"cliente_uf": "UF", "num_clientes": "Nº Clientes"},
+                         color="num_clientes",
+                         color_continuous_scale='Purples')
+            
+            fig5.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                height=400
+            )
+            
             st.plotly_chart(fig5, use_container_width=True)
 
     # Tabela detalhada
-    st.subheader("📋 Tabela Completa de Clientes")
+    st.markdown('<div class="section-header"><h3>📋 Tabela Completa de Clientes</h3></div>', unsafe_allow_html=True)
     
     # Selecionar colunas para mostrar
     colunas_mostrar = ["client_label", "n_transacoes", "volume_total", "ticket_medio", 
@@ -284,12 +406,13 @@ if not df.empty and "client_label" in df.columns:
         label="📥 Download CSV Completo",
         data=csv,
         file_name="detalhes_clientes.csv",
-        mime="text/csv"
+        mime="text/csv",
+        use_container_width=True
     )
 
     # Análise demográfica
     if "idade" in clientes_filtrados.columns:
-        st.subheader("👥 Análise Demográfica")
+        st.markdown('<div class="section-header"><h3>👥 Análise Demográfica</h3></div>', unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         
@@ -305,15 +428,42 @@ if not df.empty and "client_label" in df.columns:
             
             fig6 = px.bar(por_idade, x="faixa_etaria", y="num_clientes",
                          title="Distribuição por Faixa Etária",
-                         labels={"faixa_etaria": "Faixa Etária", "num_clientes": "Nº Clientes"})
+                         labels={"faixa_etaria": "Faixa Etária", "num_clientes": "Nº Clientes"},
+                         color="num_clientes",
+                         color_continuous_scale='Oranges')
+            
+            fig6.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                height=400
+            )
+            
             st.plotly_chart(fig6, use_container_width=True)
         
         with col2:
             fig7 = px.scatter(clientes_filtrados, x="idade", y="volume_total",
                              title="Volume vs Idade",
                              labels={"idade": "Idade", "volume_total": "Volume Total"},
-                             hover_data=["client_label"])
+                             hover_data=["client_label"],
+                             color="volume_total",
+                             color_continuous_scale='Viridis')
+            
+            fig7.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                height=400
+            )
+            
             st.plotly_chart(fig7, use_container_width=True)
 
 else:
     st.warning("Não foi possível realizar a análise de clientes.")
+
+# Footer
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; color: #666; padding: 20px;'>
+    <p>© 2024 BanVic — Análise de Clientes</p>
+    <p>Desenvolvido por Marcelo Pires | 📊 Painel de Business Intelligence</p>
+</div>
+""", unsafe_allow_html=True)
