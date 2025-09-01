@@ -439,11 +439,22 @@ if "_dt" in df.columns:
     mask = (df["_dt"] >= start) & (df["_dt"] <= end)
     df = df.loc[mask]
 
-# Agência filter - CORREÇÃO: Só aplicar filtro se não for página de análise
-# Verificar se estamos em uma página de análise pelas variáveis de sessão
+# Agência filter
 is_analysis_page = st.session_state.get('is_analysis_page', False)
 
-if not is_analysis_page and sel_ag != "Todas" and agency_id_col in df.columns:
+# Agência filter - Só aplicar filtro se não for página de análise
+if not st.session_state.get('is_analysis_page', False) and sel_ag != "Todas":
+    if agency_id_col in df.columns:
+        # try map name -> id if agency master table present
+        if agencias is not None and ag_name_col and ag_master_id_col:
+            # Primeiro filtramos as agências pelo nome selecionado
+            ids = agencias.loc[agencias[ag_name_col].astype(str) == sel_ag, ag_master_id_col].unique()
+            if len(ids):
+                df = df[df[agency_id_col].isin(ids)]
+            else:
+                df = df[df[agency_id_col].astype(str) == sel_ag]
+        else:
+            df = df[df[agency_id_col].astype(str) == sel_ag]
     # try map name -> id if agency master table present
     if agencias is not None and ag_name_col and ag_master_id_col:
         # Primeiro filtramos as agências pelo nome selecionado
@@ -746,85 +757,95 @@ with right:
         else:
             st.info("Dados incompletos para gráfico mensal.")
     st.markdown("</div>", unsafe_allow_html=True)
+    st.session_state['is_analysis_page'] = False
+    st.markdown('<div class="section-card"><h4>Top 10 Agências</h4>', unsafe_allow_html=True)
 
-    st.markdown('<div class="section-card"><h4>Top Agências (6 meses)</h4>', unsafe_allow_html=True)
-    try:
-        tmp = df.copy()
+try:
+    # USAR DADOS COMPLETOS SEM FILTRO DE AGÊNCIA para o ranking
+    tmp = st.session_state["df_unfiltered"].copy()
+    
+    # Debug: Verificar quantas agências temos nos dados
+    st.sidebar.info(f"Dados totais: {len(tmp)} transações")
+    if "agencia_nome" in tmp.columns:
+        st.sidebar.info(f"Agências únicas: {tmp['agencia_nome'].nunique()}")
+    
+    # Garantir que temos coluna de agência
+    if "agencia_nome" not in tmp.columns:
+        # Tentar criar a coluna agencia_nome se não existir
+        agency_id_col = st.session_state.get("meta_info", {}).get("agency_id_col")
+        if agency_id_col and agency_id_col in tmp.columns:
+            tmp["agencia_nome"] = "Agência " + tmp[agency_id_col].astype(str)
+        else:
+            st.error("Coluna de agência não encontrada nos dados")
+            st.markdown("</div>", unsafe_allow_html=True)
+            raise ValueError("Coluna de agência não disponível")
+
+    # Filtrar apenas agências com nome válido
+    tmp = tmp[tmp["agencia_nome"].notna() & (tmp["agencia_nome"].str.strip() != "")]
+    
+    if tmp.empty:
+        st.info("Nenhum dado válido de agência disponível.")
+    else:
+        # Agrupar por agência
+        ranking = tmp.groupby("agencia_nome").agg(
+            num_transacoes=("_amt", "count"),
+            volume_total=("_amt", "sum")
+        ).reset_index().sort_values("num_transacoes", ascending=False)
+
+        # Top 10 por número de transações
+        top10 = ranking.head(10)
         
-        # Verificar se temos informações de agências
-        if "agencia_nome" in tmp.columns:
-            agency_label_col = "agencia_nome"
-        else:
-            # Fallback para ID da agência
-            agency_id_col = st.session_state.get("agency_id_col")
-            if agency_id_col and agency_id_col in tmp.columns:
-                tmp["agencia_nome"] = tmp[agency_id_col].astype(str)
-                agency_label_col = "agencia_nome"
-            else:
-                agency_label_col = None
+        # Debug: Mostrar informações no sidebar
+        st.sidebar.write("**Top 3 agências:**")
+        for i, row in top10.head(3).iterrows():
+            st.sidebar.write(f"{i+1}. {row['agencia_nome']}: {row['num_transacoes']} transações")
 
-        if agency_label_col and not tmp.empty:
-            # Filtrar últimos 6 meses
-            if "_dt" in tmp.columns:
-                max_date = tmp["_dt"].max()
-                if pd.notna(max_date):
-                    start6 = max_date - pd.DateOffset(months=6)
-                    tmp6 = tmp[tmp["_dt"] >= start6]
-                else:
-                    tmp6 = tmp
-            else:
-                tmp6 = tmp
+        # Gráfico Top 10 - Horizontal
+        fig = px.bar(
+            top10.sort_values("num_transacoes", ascending=True),
+            x="num_transacoes",
+            y="agencia_nome",
+            orientation='h',
+            title="Top 10 Agências por Número de Transações",
+            labels={"num_transacoes": "Número de Transações", "agencia_nome": "Agência"},
+            hover_data=["volume_total"],
+            color="num_transacoes",
+            color_continuous_scale="blues"
+        )
+        fig.update_layout(
+            yaxis={'categoryorder':'total ascending'},
+            height=500
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-            ranking6 = tmp6.groupby(agency_label_col)["_amt"].agg(["count", "sum"]).reset_index().rename(columns={"count":"num_transacoes", "sum":"volume_total"})
-            ranking6 = ranking6.sort_values("num_transacoes", ascending=False)
-            ranking6 = ranking6.head(10)
-            ranking6 = ranking6.sort_values("volume_total", ascending=False)
-            
+        # Tabela detalhada
+        st.subheader("Detalhes do Ranking")
+        
+        # Formatar valores
+        top10_display = top10.copy()
+        top10_display["volume_total"] = top10_display["volume_total"].apply(lambda x: f"R$ {x:,.2f}")
+        top10_display["num_transacoes"] = top10_display["num_transacoes"].apply(lambda x: f"{x:,.0f}")
+        
+        st.dataframe(
+            top10_display,
+            use_container_width=True,
+            column_config={
+                "agencia_nome": st.column_config.TextColumn("Agência", width="large"),
+                "num_transacoes": st.column_config.TextColumn("Transações"),
+                "volume_total": st.column_config.TextColumn("Volume Total")
+            },
+            hide_index=True
+        )
 
-            if not ranking6.empty:
-                # Gráfico de top 10
-                top10 = ranking6.head(10).sort_values("num_transacoes", ascending=True)
-                
-                # Criar label completo para o gráfico
-                if "agencia_uf" in top10.columns and "agencia_tipo" in top10.columns:
-                    top10["agencia_label"] = top10[agency_label_col] + " (" + top10["agencia_uf"] + " - " + top10["agencia_tipo"] + ")"
-                elif "agencia_uf" in top10.columns:
-                    top10["agencia_label"] = top10[agency_label_col] + " (" + top10["agencia_uf"] + ")"
-                else:
-                    top10["agencia_label"] = top10[agency_label_col]
-                
-                fig = px.bar(top10, 
-                            x="num_transacoes", 
-                            y="agencia_label", 
-                            orientation="h",
-                            title="Top 10 Agências - nº transações (6m)", 
-                            labels={"num_transacoes": "Número de Transações", "agencia_label": "Agência"},
-                            hover_data=["volume_total"])
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Tabela de dados
-                st.dataframe(
-                    ranking6.head(20),
-                    column_config={
-                        agency_label_col: "Agência",
-                        "agencia_uf": "UF",
-                        "agencia_tipo": "Tipo",
-                        "agencia_cidade": "Cidade",
-                        "num_transacoes": st.column_config.NumberColumn("Nº Transações", format="%d"),
-                        "volume_total": st.column_config.NumberColumn("Volume Total", format="R$ %.2f")
-                    },
-                    use_container_width=True,
-                    height=400
-                )
-            else:
-                st.info("Nenhum dado disponível para o ranking de agências.")
-        else:
-            st.info("Nenhuma informação de agência disponível para análise.")
-            
-    except Exception as e:
-        st.error(f"Erro ao calcular top agências: {str(e)}")
-        st.error("Detalhes do erro:")
-        st.code(traceback.format_exc())
+except Exception as e:
+    st.error(f"Erro ao calcular ranking de agências: {str(e)}")
+    st.error("Detalhes do erro:")
+    st.code(traceback.format_exc())
+
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.error(f"Erro ao calcular top agências: {str(e)}")
+    st.code(traceback.format_exc())
+
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown('<div class="section-card"><h4>Sazonalidade - Dia da Semana</h4>', unsafe_allow_html=True)
