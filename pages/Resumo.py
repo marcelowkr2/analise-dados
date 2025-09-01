@@ -2,9 +2,10 @@
 import streamlit as st
 import plotly.express as px
 import pandas as pd
+import numpy as np
+from math import erf
 
 st.set_page_config(page_title="Resumo | BanVic", layout="wide")
-
 st.title("📌 Resumo Geral")
 
 if "df_filtered" not in st.session_state:
@@ -19,25 +20,8 @@ if df.empty:
     st.warning("Sem dados no período selecionado.")
     st.stop()
 
-# ---------------------------
-# KPIs
-# ---------------------------
-total_volume = df[amount_col].sum()
-media_diaria = df.groupby(df[date_col].dt.date)[amount_col].sum().mean()
-max_volume = df.groupby(df[date_col].dt.date)[amount_col].sum().max()
-min_volume = df.groupby(df[date_col].dt.date)[amount_col].sum().min()
-
-st.subheader("📊 Principais Indicadores")
-kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-kpi1.metric("Total (R$)", f"{total_volume:,.2f}")
-kpi2.metric("Média Diária (R$)", f"{media_diaria:,.2f}")
-kpi3.metric("Maior Dia (R$)", f"{max_volume:,.2f}")
-kpi4.metric("Menor Dia (R$)", f"{min_volume:,.2f}")
-
-# ---------------------------
-# Distribuição por Dia da Semana
-# ---------------------------
-st.subheader("📅 Volume por Dia da Semana")
+# ----------------- Volume por Dia da Semana -----------------
+st.subheader("Volume por Dia da Semana")
 weekday_map = {
     "Monday": "Segunda-feira",
     "Tuesday": "Terça-feira", 
@@ -48,47 +32,65 @@ weekday_map = {
     "Sunday": "Domingo"
 }
 
-df["dia_semana_pt"] = df[date_col].dt.day_name().map(weekday_map)
+df["dia_semana_en"] = df[date_col].dt.day_name()
+df["dia_semana_pt"] = df["dia_semana_en"].map(weekday_map)
 dia_order = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
 volume_por_dia = df.groupby("dia_semana_pt")[amount_col].sum().reindex(dia_order)
 
-graf1 = px.bar(
-    x=volume_por_dia.index,
-    y=volume_por_dia.values,
-    labels={"x": "Dia da Semana", "y": "Volume (R$)"},
-    title="Distribuição por Dia da Semana",
-    color=volume_por_dia.values,
-    color_continuous_scale="Blues"
-)
-graf1.update_layout(showlegend=False)
+graf1 = px.bar(x=volume_por_dia.index, y=volume_por_dia.values,
+               labels={"x": "Dia da Semana", "y": "Volume (R$)"},
+               title="Distribuição por Dia da Semana")
 st.plotly_chart(graf1, use_container_width=True)
 
-# ---------------------------
-# Tendência Mensal
-# ---------------------------
-st.subheader("📈 Tendência Mensal")
-df["mes"] = df[date_col].dt.to_period("M").astype(str)
-volume_mensal = df.groupby("mes")[amount_col].sum().reset_index()
+# ----------------- Dias Pares vs Ímpares -----------------
+st.subheader("Arrecadação: Dias Pares vs Dias Ímpares")
+df["dia_num"] = df[date_col].dt.day
+df["par"] = df["dia_num"] % 2 == 0
 
-graf2 = px.line(
-    volume_mensal, 
-    x="mes", 
-    y=amount_col, 
-    labels={"mes": "Mês", amount_col: "Volume (R$)"},
-    title="Evolução do Volume Mensal",
-    markers=True
-)
+pares = df[df["par"]][amount_col]
+impares = df[~df["par"]][amount_col]
+
+def approx_welch(x, y):
+    x = x.dropna().values.astype(float)
+    y = y.dropna().values.astype(float)
+    nx, ny = len(x), len(y)
+    if nx < 2 or ny < 2:
+        return {"mean_even": np.nan, "mean_odd": np.nan, "t": np.nan, "p": np.nan}
+    mx, my = x.mean(), y.mean()
+    vx, vy = x.var(ddof=1), y.var(ddof=1)
+    t = (mx - my) / np.sqrt(vx/nx + vy/ny)
+    z = abs(t)
+    p = 2*(1 - 0.5*(1+erf(z/np.sqrt(2))))
+    return {"mean_even": mx, "mean_odd": my, "t": t, "p": p}
+
+test = approx_welch(pares, impares)
+st.markdown(f"- Média dias pares: **R$ {test['mean_even']:,.2f}** (n={len(pares)})")
+st.markdown(f"- Média dias ímpares: **R$ {test['mean_odd']:,.2f}** (n={len(impares)})")
+st.markdown(f"- Estatística t (aprox): **{test['t']:.3f}**, p (aprox): **{test['p']:.3f}**")
+st.success("✅ Diferença estatisticamente significativa (p < 0.05)" if test['p'] < 0.05 else "ℹ️ Diferença não estatisticamente significativa")
+
+volume_paridade = df.groupby("par")[amount_col].sum().rename({True:"Pares", False:"Ímpares"})
+graf_paridade = px.bar(x=volume_paridade.index.map({True:"Pares", False:"Ímpares"}), y=volume_paridade.values,
+                       labels={"x":"Paridade do Dia", "y":"Volume (R$)"},
+                       title="Volume Total: Dias Pares vs Dias Ímpares")
+st.plotly_chart(graf_paridade, use_container_width=True)
+
+# ----------------- Tendência Mensal -----------------
+st.subheader("Tendência Mensal")
+df["mes"] = df[date_col].dt.to_period("M")
+volume_mensal = df.groupby(df["mes"].astype(str))[amount_col].sum().reset_index()
+graf2 = px.line(volume_mensal, x="mes", y=amount_col, 
+                labels={"mes": "Mês", amount_col: "Volume (R$)"},
+                title="Evolução do Volume Mensal")
 st.plotly_chart(graf2, use_container_width=True)
 
-# ---------------------------
-# Insights automáticos
-# ---------------------------
-st.subheader("💡 Insights")
-maior_dia = volume_por_dia.idxmax()
-menor_dia = volume_por_dia.idxmin()
-maior_mes = volume_mensal.loc[volume_mensal[amount_col].idxmax(), "mes"]
-menor_mes = volume_mensal.loc[volume_mensal[amount_col].idxmin(), "mes"]
+# ----------------- Tendência Mensal Dias Pares vs Ímpares -----------------
+st.subheader("Tendência Mensal: Dias Pares vs Dias Ímpares")
+df["mes_str"] = df["mes"].astype(str)
+mensal_paridade = df.groupby(["mes_str", "par"])[amount_col].sum().reset_index()
+mensal_paridade["Paridade"] = mensal_paridade["par"].map({True:"Pares", False:"Ímpares"})
 
-st.markdown(f"- O dia da semana com maior volume é **{maior_dia}** e o menor é **{menor_dia}**.")
-st.markdown(f"- O mês com maior volume é **{maior_mes}** e o menor é **{menor_mes}**.")
-st.markdown(f"- O volume total no período é **R$ {total_volume:,.2f}**.")
+graf3 = px.line(mensal_paridade, x="mes_str", y=amount_col, color="Paridade",
+                labels={"mes_str":"Mês", amount_col:"Volume (R$)", "Paridade":"Dia"},
+                title="Evolução Mensal Separada: Dias Pares vs Ímpares")
+st.plotly_chart(graf3, use_container_width=True)
