@@ -50,21 +50,21 @@ CSS = """
 }
 .kpi-card{
   flex:1;
-  background: white;
+  background: blue;
   border-radius: 12px;
   padding: 18px;
   box-shadow: 0 6px 18px rgba(28,45,70,0.06);
   border: 1px solid rgba(16,24,40,0.04);
 }
 .kpi-title{
-  color:#6b7280;
+  color:#FFFFFF;
   font-size:13px;
   margin-bottom:8px;
 }
 .kpi-value{
   font-size:22px;
   font-weight:700;
-  color:#0f172a;
+  color:#FFFFFF;
 }
 .kpi-delta{
   color:#10b981;

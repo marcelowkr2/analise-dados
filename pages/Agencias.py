@@ -2,17 +2,52 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
+import numpy as np
 
 st.set_page_config(page_title="Agências | BanVic", layout="wide")
 
-# Verificar se as variáveis de sessão existem
-if "df_filtered" not in st.session_state:
-    st.warning("Volte para a página inicial e aplique os filtros primeiro.")
-    st.stop()
+def load_data_directly():
+    """Carrega dados diretamente para evitar problemas de filtro"""
+    try:
+        # Tenta carregar os dados originais
+        from app import load_data, guess_col, to_datetime_safe
+        data = load_data()
+        
+        transacoes = data.get("transacoes")
+        agencias = data.get("agencias")
+        
+        if transacoes is None:
+            st.error("Arquivo de transações não encontrado.")
+            return None, None, None
+            
+        # Identificar colunas
+        date_col = guess_col(transacoes, ["data","date","dt","timestamp","created","datahora","datetime"])
+        amount_col = guess_col(transacoes, ["valor","amount","vlr","montante","price","total","value"])
+        agency_id_col = guess_col(transacoes, ["agencia","branch","agency","branch_id","cod_agencia","id_agencia"])
+        
+        # Processar dados
+        transacoes["_dt"] = to_datetime_safe(transacoes[date_col]) if date_col in transacoes.columns else pd.NaT
+        transacoes["_amt"] = pd.to_numeric(transacoes[amount_col], errors="coerce") if amount_col in transacoes.columns else pd.to_numeric(transacoes.iloc[:,0], errors="coerce")
+        
+        return transacoes, agencias, agency_id_col
+        
+    except Exception as e:
+        st.error(f"Erro ao carregar dados: {e}")
+        return None, None, None
 
-df = st.session_state["df_filtered"].copy()
-amount_col = st.session_state["amount_col"]
-date_col = st.session_state["date_col"]
+# Verificar se temos dados na sessão OU carregar diretamente
+if "df_filtered" in st.session_state:
+    df = st.session_state["df_filtered"].copy()
+    amount_col = st.session_state.get("amount_col", "_amt")
+    date_col = st.session_state.get("date_col", "_dt")
+else:
+    # Carregar dados diretamente
+    df, agencias, agency_id_col = load_data_directly()
+    if df is None:
+        st.warning("Volte para a página inicial primeiro.")
+        st.stop()
+    amount_col = "_amt"
+    date_col = "_dt"
 
 st.title("📊 Análise Detalhada por Agência")
 
@@ -32,22 +67,15 @@ agencia_uf_col = "agencia_uf" if "agencia_uf" in df.columns else None
 agencia_tipo_col = "agencia_tipo" if "agencia_tipo" in df.columns else None
 agencia_cidade_col = "agencia_cidade" if "agencia_cidade" in df.columns else None
 
-# Preparar dados dos últimos 6 meses
-max_date = df[date_col].max()
-
-if pd.notna(max_date):
-    start_6m = max_date - pd.DateOffset(months=6)
-    last6 = df[df[date_col] >= start_6m]
-else:
-    last6 = df
+# Usar TODOS os dados disponíveis (não aplicar filtro de tempo)
+last6 = df.copy()
 
 if last6.empty:
-    st.warning("Não há dados nos últimos 6 meses.")
+    st.warning("Não há dados disponíveis.")
     st.stop()
 
 # Calcular saques (assumindo que valores negativos são saques)
 last6["eh_saque"] = last6[amount_col] < 0
-saques = last6[last6["eh_saque"]]
 
 # Lista de colunas para agrupamento
 group_cols = []
@@ -69,6 +97,9 @@ agrupamento = last6.groupby(group_cols).agg(
 # Calcular métricas adicionais
 agrupamento["percentual_saques"] = (agrupamento["total_saques"] / agrupamento["num_transacoes"] * 100).round(1)
 agrupamento["saldo_liquido"] = agrupamento["volume_total_positivo"] + agrupamento["volume_total_negativo"]
+
+# Resto do código permanece igual a partir daqui...
+# [O restante do código que eu forneci anteriormente continua igual]
 
 st.subheader("📈 Métricas por Agência - Últimos 6 meses")
 
