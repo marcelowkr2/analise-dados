@@ -358,6 +358,7 @@ if agencias is not None:
 if clientes is not None:
     clientes.columns = [c.strip() for c in clientes.columns]
 
+
 # guess useful cols
 date_col = guess_col(transacoes, ["data","date","dt","timestamp","created","datahora","datetime"])
 amount_col = guess_col(transacoes, ["valor","amount","vlr","montante","price","total","value"])
@@ -429,11 +430,10 @@ if date_range and len(date_range) == 2:
     start = start.tz_localize(None) if hasattr(start, 'tz') else start
     end = end.tz_localize(None) if hasattr(end, 'tz') else end
     
-    # Se a coluna _dt tiver timezone, remover também
-    if hasattr(df["_dt"].dtype, 'tz'):
-        df["_dt"] = df["_dt"].dt.tz_localize(None)
-    elif df["_dt"].dt.tz is not None:
-        df["_dt"] = df["_dt"].dt.tz_localize(None)
+if "_dt" in df.columns:
+    df["_dt"] = pd.to_datetime(df["_dt"], errors="coerce")
+    df["_dt"] = df["_dt"].dt.tz_localize(None)
+
     
     # Filtro seguro
     mask = (df["_dt"] >= start) & (df["_dt"] <= end)
@@ -463,7 +463,7 @@ if not is_analysis_page and sel_ag != "Todas" and agency_id_col in df.columns:
         else:
             df = df[df[agency_id_col].astype(str) == sel_ag]
     else:
-        df = df[df[agency_id_col].astize(str) == sel_ag]
+        df = df[df[agency_id_col].astype(str) == sel_ag]
     # try map name -> id if agency master table present
     if agencias is not None and ag_name_col and ag_master_id_col:
         # Primeiro filtramos as agências pelo nome selecionado
@@ -477,6 +477,15 @@ if not is_analysis_page and sel_ag != "Todas" and agency_id_col in df.columns:
 
 # Client filter (optional) - CORREÇÃO PARA MOSTRAR NOMES
 if sel_client != "Todos" and client_id_col in df.columns and clientes is not None:
+    cli_name_col = guess_col(clientes, ["nome","name","razao"])
+    cli_id_master = guess_col(clientes, ["id","cliente","customer"])
+    if cli_name_col and cli_id_master:
+        ids = clientes.loc[clientes[cli_name_col].astype(str) == sel_client, cli_id_master].unique()
+        if len(ids):
+            df = df[df[client_id_col].isin(ids)]
+    else:
+        df = df[df[client_id_col].astype(str) == sel_client]
+
     # try join by name if possible
     cli_name_col = guess_col(clientes, ["nome","name","razao"])
     cli_id_master = guess_col(clientes, ["id","cliente","customer"])
