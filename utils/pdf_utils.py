@@ -6,17 +6,6 @@ import pandas as pd
 from datetime import datetime
 
 def build_pdf_bytes(df: pd.DataFrame, meta_info: dict, filters_info: dict) -> bytes:
-    """
-    Gera PDF resumido do dashboard.
-
-    Args:
-        df (pd.DataFrame): Dados filtrados.
-        meta_info (dict): Informações adicionais, como nome da agência.
-        filters_info (dict): Filtros aplicados no dashboard.
-
-    Returns:
-        bytes: PDF em bytes para download.
-    """
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4

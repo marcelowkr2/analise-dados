@@ -10,7 +10,7 @@ def load_data_directly():
     """Carrega dados diretamente para evitar problemas de filtro"""
     try:
         # Tenta carregar os dados originais
-        from app import load_data, guess_col, to_datetime_safe
+        from Dashboard import load_data, guess_col, to_datetime_safe
         data = load_data()
         
         transacoes = data.get("transacoes")

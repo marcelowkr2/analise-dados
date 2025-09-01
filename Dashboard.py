@@ -169,10 +169,6 @@ def format_date_pt_br(date_obj):
 
 # ---------- Função para gerar PDF completo ----------
 def generate_comprehensive_pdf(df, start_date, end_date, sel_ag, total_trans, total_vol, ticket, aprov_rate):
-    """
-    Gera relatório PDF completo com capa, KPIs, gráficos e ranking.
-    Usa ImageReader com BytesIO para evitar problemas de arquivos temporários.
-    """
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
     styles = getSampleStyleSheet()
@@ -349,6 +345,8 @@ transacoes = data.get("transacoes")
 agencias = data.get("agencias")
 clientes = data.get("clientes")
 
+st.session_state["df_unfiltered"] = transacoes.copy()
+
 if transacoes is None:
     st.error("Arquivo de transações não encontrado em `data/`. Adicione `transacoes.csv` e recarregue.")
     st.stop()
@@ -441,8 +439,31 @@ if date_range and len(date_range) == 2:
     mask = (df["_dt"] >= start) & (df["_dt"] <= end)
     df = df.loc[mask]
 
-# Agência filter - CORREÇÃO PARA MOSTRAR NOMES
-if sel_ag != "Todas" and agency_id_col in df.columns:
+# Agência filter - CORREÇÃO: Só aplicar filtro se não for página de análise
+# Verificar se estamos em uma página de análise pelas variáveis de sessão
+is_analysis_page = st.session_state.get('is_analysis_page', False)
+
+if not is_analysis_page and sel_ag != "Todas" and agency_id_col in df.columns:
+    # try map name -> id if agency master table present
+    if agencias is not None and ag_name_col and ag_master_id_col:
+        # Primeiro filtramos as agências pelo nome selecionado
+        ids = agencias.loc[agencias[ag_name_col].astype(str) == sel_ag, ag_master_id_col].unique()
+        if len(ids):
+            df = df[df[agency_id_col].isin(ids)]
+        else:
+            df = df[df[agency_id_col].astype(str) == sel_ag]
+    else:
+        df = df[df[agency_id_col].astype(str) == sel_ag]
+    # try map name -> id if agency master table present
+    if agencias is not None and ag_name_col and ag_master_id_col:
+        # Primeiro filtramos as agências pelo nome selecionado
+        ids = agencias.loc[agencias[ag_name_col].astype(str) == sel_ag, ag_master_id_col].unique()
+        if len(ids):
+            df = df[df[agency_id_col].isin(ids)]
+        else:
+            df = df[df[agency_id_col].astype(str) == sel_ag]
+    else:
+        df = df[df[agency_id_col].astize(str) == sel_ag]
     # try map name -> id if agency master table present
     if agencias is not None and ag_name_col and ag_master_id_col:
         # Primeiro filtramos as agências pelo nome selecionado
@@ -520,7 +541,7 @@ if agencias is not None and agency_id_col in df.columns:
     else:
         st.warning("Não foi possível identificar a coluna de ID das agências.")
 
-# ADICIONAR: Vincular informações completas de clientes (SOLUÇÃO DEFINITIVA)
+# ADICIONAR: Vincular informações completas de clientes
 if clientes is not None and client_id_col in df.columns:
     try:
         # Verificar se já processamos clientes
@@ -592,23 +613,26 @@ if clientes is not None and client_id_col in df.columns:
                 # Limpar coluna temporária
                 df.drop(columns=["cliente_id_temp"], inplace=True, errors="ignore")
                 
-                logger.info(f"✅ Colunas de cliente carregadas: {[col for col in df.columns if col.startswith('cliente_')]}")
+                logger.info(f" Colunas de cliente carregadas: {[col for col in df.columns if col.startswith('cliente_')]}")
             else:
-                logger.warning("❌ Não foi possível identificar coluna de ID do cliente")
+                logger.warning(" Não foi possível identificar coluna de ID do cliente")
         else:
-            logger.info("✅ Informações de clientes já processadas anteriormente")
+            logger.info(" Informações de clientes já processadas anteriormente")
             
     except Exception as e:
-        logger.error(f"❌ Erro ao processar clientes: {e}")
+        logger.error(f" Erro ao processar clientes: {e}")
         logger.error(traceback.format_exc())
 
 # Remover colunas com sufixo _x ou _y que podem ter sido criadas por merges duplicados
 cols_to_drop = [col for col in df.columns if col.endswith(('_x', '_y'))]
 if cols_to_drop:
-    logger.warning(f"⚠️  Removendo colunas duplicadas: {cols_to_drop}")
+    logger.warning(f"  Removendo colunas duplicadas: {cols_to_drop}")
     df.drop(columns=cols_to_drop, inplace=True)
 
-# save filtered df and meta_info in session_state (padronizado)
+# Salvar também uma versão não filtrada para as páginas de análise
+st.session_state["df_unfiltered"] = df.copy()
+
+
 st.session_state["df_filtered"] = df
 st.session_state["meta_info"] = {
     "date_col": "_dt",
@@ -667,7 +691,7 @@ with left:
     st.write(f"Clientes (filtro): **{sel_client}**")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown('<div class="section-card"> <h4>Export</h4>', unsafe_allow_html=True)
+    st.markdown('<div class="section-card"> <h4>Exportar</h4>', unsafe_allow_html=True)
     st.write("Exportar relatório PDF com os dados e gráficos do período e filtros aplicados.")
 
     if st.button("Gerar e baixar PDF"):
@@ -742,17 +766,12 @@ with right:
             else:
                 tmp6 = tmp
 
-            # Agrupar por agência com todas as informações disponíveis
-            group_cols = [agency_label_col]
-            if "agencia_uf" in tmp6.columns: group_cols.append("agencia_uf")
-            if "agencia_tipo" in tmp6.columns: group_cols.append("agencia_tipo")
-            if "agencia_cidade" in tmp6.columns: group_cols.append("agencia_cidade")
+            ranking6 = tmp6.groupby(agency_label_col)["_amt"].agg(["count", "sum"]).reset_index().rename(columns={"count":"num_transacoes", "sum":"volume_total"})
+            ranking6 = ranking6.sort_values("num_transacoes", ascending=False)
+            ranking6 = ranking6.head(10)
+            ranking6 = ranking6.sort_values("volume_total", ascending=False)
             
-            ranking6 = tmp6.groupby(group_cols)["_amt"].agg(
-                num_transacoes=("count"),
-                volume_total=("sum")
-            ).reset_index().sort_values("num_transacoes", ascending=False)
-            
+
             if not ranking6.empty:
                 # Gráfico de top 10
                 top10 = ranking6.head(10).sort_values("num_transacoes", ascending=True)
@@ -814,7 +833,9 @@ with right:
         st.error("Erro sazonalidade: " + str(e))
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------- Save compatibility keys in session_state ----------
+
+    
+
 # manter chaves individuais para compatibilidade com outras páginas
 st.session_state["amount_col"] = "_amt"
 st.session_state["date_col"] = "_dt"
