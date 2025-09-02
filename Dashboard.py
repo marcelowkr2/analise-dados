@@ -112,7 +112,7 @@ h1 {
   gap: 8px;
 }
 .kpi-value{
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--dark);
   margin: 0;
@@ -162,7 +162,7 @@ h1 {
 }
 
 [data-testid="stSidebar"] * {
-  color: #FFFFFF !important;
+  color: white !important;
   font-weight: 500 !important;
   font-size: 14px !important;
 }
@@ -191,6 +191,8 @@ h1 {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
 }
+
+
 
 /* Metric cards colors */
 .metric-card-1::before { background: linear-gradient(90deg, #ef4444 0%, #f97316 100%) !important; }
@@ -572,6 +574,18 @@ if "_dt" in df.columns:
     df["_dt"] = pd.to_datetime(df["_dt"], errors="coerce")
     df["_dt"] = df["_dt"].dt.tz_localize(None)
 
+    # CORREÇÃO: Verificar se start e end não são None antes de filtrar
+    if start is not None and end is not None:
+        # Filtro seguro - apenas se ambas as datas estão definidas
+        mask = (df["_dt"] >= start) & (df["_dt"] <= end)
+        df = df.loc[mask]
+    else:
+        # Se as datas não estão definidas, usar todo o período
+        st.warning("Período não definido. Mostrando todos os dados disponíveis.")
+
+    df["_dt"] = pd.to_datetime(df["_dt"], errors="coerce")
+    df["_dt"] = df["_dt"].dt.tz_localize(None)
+
     
     # Filtro seguro
     mask = (df["_dt"] >= start) & (df["_dt"] <= end)
@@ -892,6 +906,307 @@ with left:
     st.markdown("</div>", unsafe_allow_html=True)
 
 with right:
+    # GRÁFICO DE VOLUME MENSAL MELHORADO - VERSÃO 2.0
+    st.markdown('<div class="section-card"><h4>📈 Volume Mensal</h4>', unsafe_allow_html=True)
+    if df.empty:
+        st.warning("Sem dados no período selecionado.")
+    else:
+        if "_dt" in df.columns and "_amt" in df.columns:
+            df["_month"] = df["_dt"].dt.to_period("M").dt.to_timestamp()
+            monthly = df.groupby("_month")["_amt"].sum().reset_index().sort_values("_month")
+            monthly["_month_str"] = monthly["_month"].dt.strftime("%b/%Y")
+            
+            # Criar gráfico com Plotly Graph Objects para mais controle
+            fig = go.Figure()
+            
+            fig.add_trace(go.Scatter(
+                x=monthly["_month_str"],
+                y=monthly["_amt"],
+                mode='lines+markers+text',
+                name='Volume',
+                line=dict(width=4, color='#2563eb'),
+                marker=dict(size=8, color='#2563eb'),
+                fill='tozeroy',
+                fillcolor='rgba(37, 99, 235, 0.1)',
+                hovertemplate='<b>%{x}</b><br>R$ %{y:,.2f}<extra></extra>'
+            ))
+            
+            fig.update_layout(
+                title=dict(
+                    text="Evolução do Volume Mensal",
+                    font=dict(size=18, color='#1e293b'),
+                    x=0.5,
+                    xanchor='center'
+                ),
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#64748b'),
+                height=400,
+                hovermode='x unified',
+                xaxis=dict(
+                    title="Mês",
+                    gridcolor='#e2e8f0',
+                    linecolor='#e2e8f0'
+                ),
+                yaxis=dict(
+                    title="Volume (R$)",
+                    gridcolor='#e2e8f0',
+                    linecolor='#e2e8f0',
+                    tickformat=",.2f"
+                ),
+                showlegend=False
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Dados incompletos para gráfico mensal.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # TOP 10 AGÊNCIAS MELHORADO - VERSÃO 2.0
+    st.markdown('<div class="section-card"><h4>🏆 Top 10 Agências</h4>', unsafe_allow_html=True)
+    
+    try:
+        tmp = st.session_state["df_unfiltered"].copy()
+        
+        if "agencia_nome" not in tmp.columns:
+            agency_id_col = st.session_state.get("meta_info", {}).get("agency_id_col")
+            if agency_id_col and agency_id_col in tmp.columns:
+                tmp["agencia_nome"] = "Agência " + tmp[agency_id_col].astype(str)
+
+        if "agencia_nome" in tmp.columns:
+            tmp = tmp[tmp["agencia_nome"].notna() & (tmp["agencia_nome"].str.strip() != "")]
+            
+            ranking = tmp.groupby("agencia_nome").agg(
+                num_transacoes=("_amt", "count"),
+                volume_total=("_amt", "sum"),
+                ticket_medio=("_amt", "mean")
+            ).reset_index().sort_values("volume_total", ascending=False)
+
+            top10 = ranking.head(10)
+
+            # Gráfico de barras horizontais melhorado
+            fig = go.Figure()
+            
+            fig.add_trace(go.Bar(
+                y=top10["agencia_nome"],
+                x=top10["volume_total"],
+                orientation='h',
+                marker=dict(
+                    color=top10["volume_total"],
+                    colorscale='Viridis',
+                    line=dict(width=0)
+                ),
+                hovertemplate='<b>%{y}</b><br>Volume: R$ %{x:,.2f}<br>Transações: %{customdata[0]:,}<extra></extra>',
+                customdata=np.stack((top10['num_transacoes'], top10['ticket_medio']), axis=-1)
+            ))
+            
+            fig.update_layout(
+                title=dict(
+                    text="Top 10 Agências por Volume Financeiro",
+                    font=dict(size=18, color='#1e293b'),
+                    x=0.5,
+                    xanchor='center'
+                ),
+                height=500,
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#64748b'),
+                xaxis=dict(
+                    title="Volume Total (R$)",
+                    gridcolor='#e2e8f0',
+                    linecolor='#e2e8f0',
+                    tickformat=",.2f"
+                ),
+                yaxis=dict(
+                    title="Agência",
+                    categoryorder='total ascending',
+                    gridcolor='#e2e8f0'
+                ),
+                coloraxis_showscale=False
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Tabela interativa melhorada
+            st.subheader("📊 Detalhes do Ranking")
+            
+            top10_display = top10.copy()
+            top10_display["volume_total"] = top10_display["volume_total"].apply(lambda x: f"R$ {x:,.2f}")
+            top10_display["ticket_medio"] = top10_display["ticket_medio"].apply(lambda x: f"R$ {x:,.2f}")
+            top10_display["num_transacoes"] = top10_display["num_transacoes"].apply(lambda x: f"{x:,}")
+            
+            # Aplicar estilo à tabela
+            st.dataframe(
+                top10_display,
+                use_container_width=True,
+                column_config={
+                    "agencia_nome": st.column_config.TextColumn("Agência", width="large"),
+                    "num_transacoes": st.column_config.NumberColumn("Transações", format="%d"),
+                    "volume_total": st.column_config.TextColumn("Volume Total"),
+                    "ticket_medio": st.column_config.TextColumn("Ticket Médio")
+                },
+                hide_index=True
+            )
+        else:
+            st.info("Informações de agência não disponíveis para ranking.")
+
+    except Exception as e:
+        st.error(f"Erro ao calcular ranking: {str(e)}")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # SAZONALIDADE MELHORADA - VERSÃO 2.0
+    st.markdown('<div class="section-card"><h4>📅 Sazonalidade - Dia da Semana</h4>', unsafe_allow_html=True)
+    
+    try:
+        if "_dt" in df.columns and "_amt" in df.columns:
+            dias_semana = {
+                0: "Segunda", 1: "Terça", 2: "Quarta", 
+                3: "Quinta", 4: "Sexta", 5: "Sábado", 6: "Domingo"
+            }
+            
+            df["_weekday"] = df["_dt"].dt.dayofweek.map(dias_semana)
+            weekly = df.groupby("_weekday")["_amt"].agg(["count", "sum", "mean"]).reset_index()
+            weekly.columns = ["Dia da Semana", "Transações", "Volume", "Ticket Médio"]
+            
+            # Ordenar pelos dias da semana
+            ordem_dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+            weekly["Dia da Semana"] = pd.Categorical(weekly["Dia da Semana"], categories=ordem_dias, ordered=True)
+            weekly = weekly.sort_values("Dia da Semana")
+            
+            # Gráfico de barras com Plotly Graph Objects
+            fig = go.Figure()
+            
+            fig.add_trace(go.Bar(
+                x=weekly["Dia da Semana"],
+                y=weekly["Volume"],
+                marker=dict(
+                    color=weekly["Volume"],
+                    colorscale='Blues',
+                    line=dict(width=0)
+                ),
+                hovertemplate='<b>%{x}</b><br>Volume: R$ %{y:,.2f}<br>Transações: %{customdata:,}<extra></extra>',
+                customdata=weekly['Transações']
+            ))
+            
+            fig.update_layout(
+                title=dict(
+                    text="Volume por Dia da Semana",
+                    font=dict(size=18, color='#1e293b'),
+                    x=0.5,
+                    xanchor='center'
+                ),
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#64748b'),
+                height=400,
+                xaxis=dict(
+                    title="Dia da Semana",
+                    gridcolor='#e2e8f0'
+                ),
+                yaxis=dict(
+                    title="Volume (R$)",
+                    gridcolor='#e2e8f0',
+                    tickformat=",.2f"
+                ),
+                showlegend=False
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Métricas adicionais em cards
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("📈 Maior Volume", f"R$ {weekly['Volume'].max():,.2f}",
+                         delta=f"{((weekly['Volume'].max()/weekly['Volume'].mean())-1)*100:.1f}% vs média")
+            with col2:
+                st.metric("📉 Menor Volume", f"R$ {weekly['Volume'].min():,.2f}",
+                         delta=f"-{((1-weekly['Volume'].min()/weekly['Volume'].mean()))*100:.1f}% vs média")
+            with col3:
+                st.metric("⚖️ Variação", f"{(weekly['Volume'].max()/weekly['Volume'].min()-1)*100:.1f}%",
+                         "Máximo vs Mínimo")
+                
+        else:
+            st.info("Dados insuficientes para análise de sazonalidade.")
+            
+    except Exception as e:
+        st.error(f"Erro na análise de sazonalidade: {str(e)}")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # NOVA SEÇÃO: DISTRIBUIÇÃO DE TRANSACOES - VERSÃO 2.0
+    st.markdown('<div class="section-card"><h4>📊 Distribuição de Transações</h4>', unsafe_allow_html=True)
+    
+    try:
+        if "_amt" in df.columns:
+            # Criar subplots para histograma e boxplot
+            fig = make_subplots(rows=1, cols=2, 
+                              subplot_titles=('Distribuição de Valores', 'Box Plot'),
+                              column_widths=[0.7, 0.3])
+            
+            # Histograma
+            fig.add_trace(
+                go.Histogram(
+                    x=df["_amt"],
+                    nbinsx=20,
+                    name="Distribuição",
+                    marker=dict(color='#2563eb', line=dict(width=1, color='#ffffff')),
+                    opacity=0.7,
+                    hovertemplate='<b>Intervalo</b>: %{x:,.2f}<br><b>Frequência</b>: %{y}</b><extra></extra>'
+                ),
+                row=1, col=1
+            )
+            
+            # Box plot
+            fig.add_trace(
+                go.Box(
+                    x=df["_amt"],
+                    name="Valores",
+                    marker=dict(color='#ef4444'),
+                    boxpoints='outliers',
+                    hovertemplate='<b>Valor</b>: %{x:,.2f}<extra></extra>'
+                ),
+                row=1, col=2
+            )
+            
+            fig.update_layout(
+                title=dict(
+                    text="Análise de Distribuição de Valores",
+                    font=dict(size=18, color='#1e293b'),
+                    x=0.5,
+                    xanchor='center'
+                ),
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#64748b'),
+                height=400,
+                showlegend=False
+            )
+            
+            fig.update_xaxes(title_text="Valor (R$)", row=1, col=1, tickformat=",.2f")
+            fig.update_xaxes(title_text="Valor (R$)", row=1, col=2, tickformat=",.2f")
+            fig.update_yaxes(title_text="Frequência", row=1, col=1)
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Estatísticas em cards
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Mínimo", f"R$ {df['_amt'].min():.2f}")
+            with col2:
+                st.metric("Máximo", f"R$ {df['_amt'].max():.2f}")
+            with col3:
+                st.metric("Mediana", f"R$ {df['_amt'].median():.2f}")
+            with col4:
+                st.metric("Desvio Padrão", f"R$ {df['_amt'].std():.2f}")
+                
+        else:
+            st.info("Dados insuficientes para análise de distribuição.")
+            
+    except Exception as e:
+        st.error(f"Erro na análise de distribuição: {str(e)}")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
     # GRÁFICO DE VOLUME MENSAL MELHORADO
     st.markdown('<div class="section-card"><h4>📈 Volume Mensal</h4>', unsafe_allow_html=True)
     if df.empty:
