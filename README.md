@@ -1,6 +1,7 @@
 # BanVic Analytics — Dashboard & Relatório PDF
 
 Projeto desenvolvido em **Python** com **Streamlit** e **ReportLab** para análise e visualização de dados bancários, com exportação de relatórios em PDF.
+- Veja a aplicação online - https://marcelowkr2-analise-dados-dashboard-5lkf5s.streamlit.app/
 
 ---
 
@@ -56,7 +57,7 @@ banvic-analytics/
 
 - Instalar dependências - pip install -r requirements.txt
 - Rodar Projeto - streamlit run app.py
-
+  
   ## Algumas telas da aplicação.
 
   <div align="center">
