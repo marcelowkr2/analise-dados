@@ -57,3 +57,24 @@ banvic-analytics/
 - Instalar dependências - pip install -r requirements.txt
 - Rodar Projeto - streamlit run app.py
 
+  ## Algumas telas da aplicação.
+
+  <div align="center">
+  <img align="center" src="https://github.com/marcelowkr2/analise-dados/blob/master/image/Captura%20de%20tela%202025-09-02%20150247.png">
+</div>
+
+ <div align="center">
+  <img align="center" src="https://github.com/marcelowkr2/analise-dados/blob/master/image/Captura%20de%20tela%202025-09-02%20150340.png">
+</div>
+
+ <div align="center">
+  <img align="center" src="https://github.com/marcelowkr2/analise-dados/blob/master/image/Captura%20de%20tela%202025-09-02%20150407.png">
+</div>
+
+ <div align="center">
+  <img align="center" src="https://github.com/marcelowkr2/analise-dados/blob/master/image/Captura%20de%20tela%202025-09-02%20150429.png">
+</div>
+
+<div align="center">
+  <img align="center" src="https://github.com/marcelowkr2/analise-dados/blob/master/image/Captura%20de%20tela%202025-09-02%20150441.png">
+</div>
