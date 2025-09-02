@@ -1,4 +1,4 @@
-# pages/Balanco_agencias.py
+from plotly.subplots import make_subplots
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -131,32 +131,29 @@ h1 {
 
 /* Sidebar styling */
 [data-testid="stSidebar"] {
-  background: linear-gradient(180deg, var(--dark) 0%, var(--primary-dark) 100%);
+  background: linear-gradient(180deg, #2c3e50 0%, #3498db 50%);
 }
-
 [data-testid="stSidebar"] .stSelectbox, 
 [data-testid="stSidebar"] .stDateInput,
 [data-testid="stSidebar"] .stButton {
   background: white;
   border-radius: 8px;
   padding: 8px;
-  border: 1px solid var(--gray-light);
 }
 
 [data-testid="stSidebar"] * {
-  color: #FFFFFF !important;
-  font-weight: 500 !important;
-  font-size: 14px !important;
+color: #FFFFFF !important;   /* branco */
+font-weight: 600;            /* negrito */
+font-size: 16px;             /* tamanho do texto */
 }
 
-[data-testid="stSidebar"] .stButton button {
-  background: linear-gradient(90deg, var(--accent) 0%, #0ca678 100%) !important;
-  color: white !important;
-  border: none !important;
-  border-radius: 8px !important;
-  padding: 10px 16px !important;
-  font-weight: 600 !important;
+
+[data-testid="stSidebar"] h2, 
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] p {
+  color: black !important;
 }
+
 
 /* Botões principais */
 .stButton button {
