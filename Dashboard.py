@@ -115,6 +115,14 @@ font-weight: 600;            /* negrito */
 font-size: 16px;             /* tamanho do texto */
 }
 
+
+[data-testid="stSidebar"] h2, 
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] p {
+  color: black !important;
+}
+
+
 /* Metric cards colors */
 .metric-card-1 { background: linear-gradient(135deg, #FF6B6B 0%, #EE5A24 100%) !important; }
 .metric-card-2 { background: linear-gradient(135deg, #36A2EB 0%, #4ECDC4 100%) !important; }
