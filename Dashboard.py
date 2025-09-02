@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import io
 from pathlib import Path
 from datetime import datetime
@@ -23,7 +25,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-st.set_page_config(page_title="BanVic Analytics", page_icon="📊", layout="wide")
+st.set_page_config(page_title="BanVic Análises", page_icon="📊", layout="wide")
 DATA_DIR = Path("data")
 
 # locale (tentativa pt_BR)
@@ -35,71 +37,120 @@ except Exception:
     except Exception:
         st.warning("Não foi possível configurar o locale para português. As datas serão em inglês.")
 
-# CSS MODERNIZADO
+# CSS MODERNIZADO - VERSÃO 2.0
 CSS = """
 <style>
+/* Variáveis de cores para o tema */
+:root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --secondary: #7c3aed;
+    --accent: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --info: #06b6d4;
+    --light: #f8fafc;
+    --dark: #1e293b;
+    --gray: #64748b;
+    --gray-light: #e2e8f0;
+}
+
 /* page background */
 [data-testid="stAppViewContainer"]{
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Main title */
+h1 {
+  color: var(--dark) !important;
+  font-weight: 700 !important;
+  margin-bottom: 0.5rem !important;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 /* card grid */
 .kpi-grid{
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
 .kpi-card{
-  flex: 1;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: white;
   border-radius: 16px;
   padding: 20px;
-  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-  border: none;
-  transition: transform 0.3s ease;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  border: 1px solid var(--gray-light);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
 }
 .kpi-card:hover{
   transform: translateY(-5px);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
 }
 .kpi-title{
-  color: #ffffff;
+  color: var(--gray);
   font-size: 14px;
-  margin-bottom: 10px;
-  font-weight: 300;
-  opacity: 0.9;
+  margin-bottom: 8px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .kpi-value{
-  font-size: 20px;
-  font-weight: 300;
-  color: #ffffff;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--dark);
   margin: 0;
+  line-height: 1.2;
 }
 .kpi-delta{
-  color: #10b981;
   font-weight: 600;
   margin-top: 8px;
   font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
+.kpi-delta.positive { color: var(--accent); }
+.kpi-delta.negative { color: var(--danger); }
+
 .section-card{
   background: white;
-  padding: 20px;
+  padding: 24px;
   border-radius: 16px;
-  box-shadow: 0 8px 25px rgba(0,0,0,0.08);
-  border: none;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  border: 1px solid var(--gray-light);
   margin-bottom: 24px;
 }
 .section-header {
-  background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
+  background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%);
   color: white;
-  padding: 15px;
+  padding: 16px 20px;
   border-radius: 12px;
   margin: 20px 0;
+  font-weight: 600;
+  font-size: 18px;
 }
-.small-muted{ color:#6b7280; font-size:13px; }
+.small-muted{ color: var(--gray); font-size: 13px; }
 
 /* Sidebar styling */
 [data-testid="stSidebar"] {
-  background: linear-gradient(180deg, #2c3e50 0%, #3498db 50%);
+  background: linear-gradient(180deg, var(--dark) 0%, var(--primary-dark) 100%);
 }
 [data-testid="stSidebar"] .stSelectbox, 
 [data-testid="stSidebar"] .stDateInput,
@@ -107,19 +158,66 @@ CSS = """
   background: white;
   border-radius: 8px;
   padding: 8px;
+  border: 1px solid var(--gray-light);
 }
 
 [data-testid="stSidebar"] * {
-color: #FFFFFF !important;   /* branco */
-font-weight: 600;            /* negrito */
-font-size: 16px;             /* tamanho do texto */
+  color: #FFFFFF !important;
+  font-weight: 500 !important;
+  font-size: 14px !important;
+}
+
+[data-testid="stSidebar"] .stButton button {
+  background: linear-gradient(90deg, var(--accent) 0%, #0ca678 100%) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 10px 16px !important;
+  font-weight: 600 !important;
+}
+
+/* Botões principais */
+.stButton button {
+  background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 10px 16px !important;
+  font-weight: 600 !important;
+  transition: all 0.3s ease !important;
+}
+
+.stButton button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
 }
 
 /* Metric cards colors */
-.metric-card-1 { background: linear-gradient(135deg, #FF6B6B 0%, #EE5A24 100%) !important; }
-.metric-card-2 { background: linear-gradient(135deg, #36A2EB 0%, #4ECDC4 100%) !important; }
-.metric-card-3 { background: linear-gradient(135deg, #FFD93D 0%, #FF9A3D 100%) !important; }
-.metric-card-4 { background: linear-gradient(135deg, #6A11CB 0%, #2575FC 100%) !important; }
+.metric-card-1::before { background: linear-gradient(90deg, #ef4444 0%, #f97316 100%) !important; }
+.metric-card-2::before { background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%) !important; }
+.metric-card-3::before { background: linear-gradient(90deg, #f59e0b 0%, #ec4899 100%) !important; }
+.metric-card-4::before { background: linear-gradient(90deg, #8b5cf6 0%, #ec4899 100%) !important; }
+
+/* Tabelas */
+.dataframe {
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+}
+
+/* Gráficos container */
+.js-plotly-plot .plotly, .element-container {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Footer */
+footer {
+  color: var(--gray) !important;
+  font-size: 14px !important;
+  text-align: center !important;
+  margin-top: 2rem !important;
+}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -370,7 +468,7 @@ def generate_comprehensive_pdf(df, start_date, end_date, sel_ag, total_trans, to
     def add_footer(canvas_obj, doc_obj):
         canvas_obj.saveState()
         canvas_obj.setFont('Helvetica', 8)
-        canvas_obj.drawString(0.5*inch, 0.5*inch, f"BanVic Analytics - Página {doc_obj.page}")
+        canvas_obj.drawString(0.5*inch, 0.5*inch, f"BanVic Análises - Página {doc_obj.page}")
         canvas_obj.drawRightString(A4[0]-0.5*inch, 0.5*inch, datetime.now().strftime('%d/%m/%Y %H:%M'))
         canvas_obj.restoreState()
 
@@ -706,7 +804,7 @@ st.session_state["meta_info"] = {
 }
 
 # ---------- Header / KPIs (cards) ----------
-st.title("📊 BanVic Analytics Dashboard")
+st.title("📊 BanVic Análises")
 st.markdown("Painel interativo com KPIs, ranking de agências, análise de clientes e tendências. Use os filtros na lateral.")
 
 # compute KPIs
@@ -715,27 +813,41 @@ total_vol = float(df["_amt"].sum(skipna=True)) if "_amt" in df.columns else 0.0
 ticket = total_vol / total_trans if total_trans > 0 else 0.0
 aprov_rate = df["_approved"].mean() * 100 if "_approved" in df.columns else np.nan
 
-def kpi_card(title, value, card_class="", fmt=None):
+def kpi_card(title, value, icon="📊", card_class="", fmt=None, delta=None):
     val = f"{value}" if fmt is None else fmt.format(value)
+    
+    delta_html = ""
+    if delta is not None:
+        delta_class = "positive" if delta >= 0 else "negative"
+        delta_icon = "↗️" if delta >= 0 else "↘️"
+        delta_html = f'<div class="kpi-delta {delta_class}">{delta_icon} {abs(delta):.1f}%</div>'
+    
     html = f"""
     <div class="kpi-card {card_class}">
-      <div class="kpi-title">{title}</div>
+      <div class="kpi-title">{icon} {title}</div>
       <div class="kpi-value">{val}</div>
+      {delta_html}
     </div>
     """
     return html
 
-cols = st.columns([1,1,1,1])
-with cols[0]:
-    st.markdown(kpi_card("💳 Total de Transações", f"{total_trans:,}".replace(",", "."), "metric-card-1"), unsafe_allow_html=True)
-with cols[1]:
-    st.markdown(kpi_card("💰 Volume Total", f"R$ {total_vol:,.2f}".replace(",", "."), "metric-card-2"), unsafe_allow_html=True)
-with cols[2]:
-    st.markdown(kpi_card("🎫 Ticket Médio", f"R$ {ticket:,.2f}".replace(",", "."), "metric-card-3"), unsafe_allow_html=True)
-with cols[3]:
-    aprov_display = f"{aprov_rate:.1f}%" if not np.isnan(aprov_rate) else "N/A"
-    st.markdown(kpi_card("✅ Taxa de Aprovação", aprov_display, "metric-card-4"), unsafe_allow_html=True)
+with st.container():
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(kpi_card("Total de Transações", f"{total_trans:,}".replace(",", "."), 
+                           "💳", "metric-card-1", delta=total_trans), unsafe_allow_html=True)
+    with col2:
+        st.markdown(kpi_card("Volume Total", f"R$ {total_vol:,.2f}".replace(",", "."), 
+                           "💰", "metric-card-2", delta=total_vol), unsafe_allow_html=True)
+    with col3:
+        st.markdown(kpi_card("Ticket Médio", f"R$ {ticket:,.2f}".replace(",", "."), 
+                           "🎫", "metric-card-3", delta=ticket), unsafe_allow_html=True)
+    with col4:
+        aprov_display = f"{aprov_rate:.1f}%" if not np.isnan(aprov_rate) else "N/A"
+        st.markdown(kpi_card("Taxa de Aprovação", aprov_display, 
+                           "✅", "metric-card-4", delta=aprov_rate), unsafe_allow_html=True)
 
+st.markdown('</div>', unsafe_allow_html=True)
 st.markdown("---")
 
 # ---------- Layout: left filters + right content ----------
@@ -981,4 +1093,4 @@ st.session_state["clientes_df"] = clientes
 
 # ---------- Footer ----------
 st.markdown("---")
-st.markdown("© BanVic — Dashboard de Analytics. Desenvolvido por Marcelo Pires.")
+st.markdown("© BanVic — Dashboard de Análises. Desenvolvido por Marcelo Pires.")
