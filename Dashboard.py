@@ -113,7 +113,7 @@ h1 {
 }
 .kpi-value{
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--dark);
   margin: 0;
   line-height: 1.2;
